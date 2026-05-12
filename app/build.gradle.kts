@@ -63,6 +63,9 @@ dependencies {
     // JSON
     implementation("com.google.code.gson:gson:2.11.0")
 
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -1,0 +1,203 @@
+package com.yueming.baby.ui.screens
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import com.yueming.baby.data.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PhotosScreen() {
+    val babyInfo by DataManager.babyInfo.collectAsState()
+    val photos by DataManager.photos.collectAsState()
+    var showUpload by remember { mutableStateOf(false) }
+    var photoCaption by remember { mutableStateOf("") }
+    var photoUrl by remember { mutableStateOf("") }
+    var showUrlInput by remember { mutableStateOf(false) }
+    var lightboxPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // Header
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("${babyInfo.nickname}的照片墙",
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("${photos.size} 张照片", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (!showUpload) {
+                Button(
+                    onClick = { showUpload = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
+                ) {
+                    Text("上传照片", color = Color.White)
+                }
+            }
+        }
+
+        // Upload section
+        if (showUpload) {
+            Spacer(Modifier.height(12.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("添加照片", fontWeight = FontWeight.Medium)
+                        IconButton(onClick = { showUpload = false }) {
+                            Icon(Icons.Default.Close, null)
+                        }
+                    }
+                    OutlinedTextField(
+                        value = photoCaption,
+                        onValueChange = { photoCaption = it },
+                        label = { Text("照片描述（可选）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (showUrlInput) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = photoUrl,
+                                onValueChange = { photoUrl = it },
+                                label = { Text("图片URL") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            Button(
+                                onClick = {
+                                    val url = photoUrl.trim()
+                                    if (url.isNotEmpty()) {
+                                        DataManager.addPhoto(PhotoEntry(
+                                            id = "photo-${UUID.randomUUID().toString().take(8)}",
+                                            url = url,
+                                            caption = photoCaption.ifBlank { "照片" },
+                                            date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                                            tags = emptyList()
+                                        ))
+                                        photoUrl = ""
+                                        photoCaption = ""
+                                        showUrlInput = false
+                                        showUpload = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
+                            ) {
+                                Text("添加", color = Color.White)
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { showUrlInput = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("图片链接")
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        if (photos.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.PhotoLibrary, null, Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    Spacer(Modifier.height(8.dp))
+                    Text("还没有照片", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("上传宝宝的第一张照片吧",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(photos) { photo ->
+                    Card(
+                        modifier = Modifier.aspectRatio(1f).clickable { lightboxPhoto = photo },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        AsyncImage(
+                            model = photo.url,
+                            contentDescription = photo.caption,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Lightbox
+    lightboxPhoto?.let { photo ->
+        Dialog(
+            onDismissRequest = { lightboxPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().clickable { lightboxPhoto = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    AsyncImage(
+                        model = photo.url,
+                        contentDescription = photo.caption,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(photo.caption, color = Color.White,
+                        fontWeight = FontWeight.Medium)
+                    Text(photo.date, color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}

@@ -6,3 +6,4 @@
 *.iml
 .gradle/
 local.properties
+.gradle/
