@@ -2,6 +2,8 @@ package com.yueming.baby.data
 
 import androidx.compose.ui.graphics.Color
 
+enum class ThemeMode { LIGHT, DARK, SYSTEM }
+
 data class BabyInfo(
     val name: String = "小月亮",
     val nickname: String = "月月",

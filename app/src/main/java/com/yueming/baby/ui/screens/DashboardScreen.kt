@@ -1,5 +1,7 @@
 package com.yueming.baby.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +27,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +48,16 @@ fun DashboardScreen() {
     val milestoneCount = DataManager.getMilestoneCount()
 
     val tip = TIPS.find { t -> ageMonths >= t.months.first && ageMonths <= t.months.second } ?: TIPS.last()
+
+    val context = LocalContext.current
+    val avatarPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val uriStr = uri.toString()
+            DataManager.updateBabyInfo(babyInfo.copy(avatar = uriStr))
+        }
+    }
 
     val upcomingMilestones = remember(ageMonths) { getMilestonesForAge(ageMonths) }
 
@@ -96,7 +109,8 @@ fun DashboardScreen() {
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFF8C8D8)),
+                        .background(Color(0xFFF8C8D8))
+                        .clickable { avatarPicker.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
                     if (babyInfo.avatar != null) {

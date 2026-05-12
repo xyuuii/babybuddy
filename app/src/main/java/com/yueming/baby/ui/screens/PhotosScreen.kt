@@ -1,7 +1,12 @@
 package com.yueming.baby.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -19,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -27,7 +33,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PhotosScreen() {
     val babyInfo by DataManager.babyInfo.collectAsState()
@@ -37,6 +43,44 @@ fun PhotosScreen() {
     var photoUrl by remember { mutableStateOf("") }
     var showUrlInput by remember { mutableStateOf(false) }
     var lightboxPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
+
+    // Image picker
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val uriStr = uri.toString()
+            DataManager.addPhoto(PhotoEntry(
+                id = "photo-${UUID.randomUUID().toString().take(8)}",
+                url = uriStr,
+                caption = photoCaption.ifBlank { "照片" },
+                date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                tags = emptyList()
+            ))
+            photoCaption = ""
+            showUpload = false
+        }
+    }
+
+    // Group photos by month
+    val groupedPhotos = remember(photos) {
+        val sorted = photos.sortedByDescending { it.date }
+        val groups = linkedMapOf<String, List<PhotoEntry>>()
+        for (photo in sorted) {
+            try {
+                val date = LocalDate.parse(photo.date)
+                val label = "${date.year}年${date.monthValue}月"
+                groups.getOrPut(label) { mutableListOf() }.let {
+                    groups[label] = (it as MutableList) + photo
+                }
+            } catch (_: Exception) {
+                groups.getOrPut("未知日期") { mutableListOf() }.let {
+                    groups["未知日期"] = (it as MutableList) + photo
+                }
+            }
+        }
+        groups.toList()
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Header
@@ -86,6 +130,25 @@ fun PhotosScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { photoPicker.launch("image/*") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("从相册选择", fontSize = 12.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { showUrlInput = !showUrlInput },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (showUrlInput) "收起" else "图片链接", fontSize = 12.sp)
+                        }
+                    }
                     if (showUrlInput) {
                         Row(
                             Modifier.fillMaxWidth(),
@@ -121,13 +184,6 @@ fun PhotosScreen() {
                                 Text("添加", color = Color.White)
                             }
                         }
-                    } else {
-                        OutlinedButton(
-                            onClick = { showUrlInput = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("图片链接")
-                        }
                     }
                 }
             }
@@ -148,24 +204,68 @@ fun PhotosScreen() {
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            // Month-grouped photos with sticky headers (Fix 2)
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(photos) { photo ->
-                    Card(
-                        modifier = Modifier.aspectRatio(1f).clickable { lightboxPhoto = photo },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        AsyncImage(
-                            model = photo.url,
-                            contentDescription = photo.caption,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                groupedPhotos.forEach { (monthLabel, monthPhotos) ->
+                    stickyHeader {
+                        Surface(
+                            color = MaterialTheme.colorScheme.background,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    monthLabel,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "  ${monthPhotos.size}张",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        val chunked = monthPhotos.chunked(3)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            chunked.forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    row.forEach { photo ->
+                                        Card(
+                                            modifier = Modifier.weight(1f).aspectRatio(1f)
+                                                .clickable { lightboxPhoto = photo },
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            AsyncImage(
+                                                model = photo.url,
+                                                contentDescription = photo.caption,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        }
+                                    }
+                                    // Fill remaining slots with spacers
+                                    repeat(3 - row.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }

@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -21,15 +20,24 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.yueming.baby.data.DataManager
 import com.yueming.baby.ui.screens.*
 import com.yueming.baby.ui.theme.YueMingTheme
+import com.yueming.baby.ui.theme.ThemeMode
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DataManager.init(applicationContext)
         enableEdgeToEdge()
         setContent {
-            YueMingTheme {
+            val themeMode by DataManager.themeMode.collectAsState()
+            val mappedTheme = when (themeMode) {
+                com.yueming.baby.data.ThemeMode.LIGHT -> ThemeMode.LIGHT
+                com.yueming.baby.data.ThemeMode.DARK -> ThemeMode.DARK
+                com.yueming.baby.data.ThemeMode.SYSTEM -> ThemeMode.SYSTEM
+            }
+            YueMingTheme(themeMode = mappedTheme) {
                 YueMingApp()
             }
         }

@@ -1,13 +1,15 @@
 package com.yueming.baby.ui.screens
 
 import android.app.DatePickerDialog
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,6 +35,7 @@ fun SettingsScreen() {
     val photos by DataManager.photos.collectAsState()
     val aiConfig by DataManager.aiConfig.collectAsState()
     val customCategories by DataManager.customCategories.collectAsState()
+    val themeMode by DataManager.themeMode.collectAsState()
     val allCategories = DataManager.allCategories
 
     var babyForm by remember { mutableStateOf(babyInfo) }
@@ -45,6 +48,20 @@ fun SettingsScreen() {
 
     val context = LocalContext.current
 
+    // Image picker for avatar
+    val avatarPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val uriStr = uri.toString()
+            babyForm = babyForm.copy(avatar = uriStr)
+            // Auto-save avatar change
+            DataManager.updateBabyInfo(babyForm.copy(avatar = uriStr))
+            savedBaby = true
+            Toast.makeText(context, "头像已更新", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -52,6 +69,42 @@ fun SettingsScreen() {
     ) {
         item {
             Text("设置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        }
+
+        // Theme Settings (Fix 1)
+        item {
+            Card(shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DarkMode, null, Modifier.size(18.dp), tint = Color(0xFF7C4DFF))
+                        Spacer(Modifier.width(8.dp))
+                        Text("主题设置", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            ThemeMode.LIGHT to "亮色",
+                            ThemeMode.DARK to "暗色",
+                            ThemeMode.SYSTEM to "跟随系统"
+                        ).forEach { (mode, label) ->
+                            FilterChip(
+                                selected = themeMode == mode,
+                                onClick = { DataManager.setThemeMode(mode) },
+                                label = { Text(label, fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF7C4DFF).copy(alpha = 0.3f),
+                                    selectedLabelColor = Color(0xFF7C4DFF)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Baby Info
@@ -66,14 +119,15 @@ fun SettingsScreen() {
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // Avatar
+                    // Avatar with click to pick (Fix 3)
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier.size(80.dp).clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFFF8C8D8)),
+                                .background(Color(0xFFF8C8D8))
+                                .clickable { avatarPicker.launch("image/*") },
                             contentAlignment = Alignment.Center
                         ) {
                             if (babyForm.avatar != null) {
@@ -84,8 +138,12 @@ fun SettingsScreen() {
                                     tint = Color.White)
                             }
                         }
+                        Text("点击更换头像",
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(top = 88.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(20.dp))
 
                     OutlinedTextField(
                         value = babyForm.name, onValueChange = { babyForm = babyForm.copy(name = it) },
@@ -165,7 +223,6 @@ fun SettingsScreen() {
                         modifier = Modifier.fillMaxWidth(), singleLine = true
                     )
                     Spacer(Modifier.height(8.dp))
-                    // Model selector
                     Text("模型选择", style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(4.dp))
@@ -300,7 +357,7 @@ fun SettingsScreen() {
             }
         }
 
-        // Data Management
+        // Data Management (Fix 7 - export/import)
         item {
             Card(shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
@@ -318,7 +375,7 @@ fun SettingsScreen() {
                             Icon(Icons.Default.Info, null, Modifier.size(14.dp),
                                 tint = Color(0xFF1976D2))
                             Spacer(Modifier.width(8.dp))
-                            Text("数据存储在本地。建议定期导出备份。",
+                            Text("数据存储在本地 Room 数据库。建议定期导出备份。",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF1976D2))
                         }
@@ -337,14 +394,23 @@ fun SettingsScreen() {
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { /* Export JSON */ },
+                            onClick = {
+                                DataManager.exportToJson { json ->
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(Intent.EXTRA_TEXT, json)
+                                        putExtra(Intent.EXTRA_SUBJECT, "悦萌数据备份")
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "导出数据"))
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Download, null, Modifier.size(14.dp))
                             Text("导出JSON", fontSize = 12.sp)
                         }
                         OutlinedButton(
-                            onClick = { /* Import JSON */ },
+                            onClick = { /* Import JSON - placeholder */ },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Upload, null, Modifier.size(14.dp))
@@ -353,7 +419,11 @@ fun SettingsScreen() {
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { /* Reset data */ },
+                        onClick = {
+                            DataManager.resetAllData {
+                                Toast.makeText(context, "数据已清除", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
                     ) {
@@ -378,7 +448,7 @@ fun SettingsScreen() {
                     Text("悦萌 YueMing v2.0", style = MaterialTheme.typography.bodySmall)
                     Text("宝宝成长记录应用", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Jetpack Compose + Material3", style = MaterialTheme.typography.bodySmall,
+                    Text("Jetpack Compose + Material3 + Room", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

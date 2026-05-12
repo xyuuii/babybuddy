@@ -1,34 +1,40 @@
 package com.yueming.baby.ui.screens
 
-import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.yueming.baby.data.*
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TimelineScreen() {
     val babyInfo by DataManager.babyInfo.collectAsState()
@@ -80,17 +86,19 @@ fun TimelineScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // Filter chips
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            // Fix 4: Scrollable filter chips with LazyRow
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
-                FilterChip(
-                    selected = activeCategory == "all",
-                    onClick = { activeCategory = "all" },
-                    label = { Text("全部", fontSize = 12.sp) }
-                )
-                allCategories.forEach { cat ->
+                item {
+                    FilterChip(
+                        selected = activeCategory == "all",
+                        onClick = { activeCategory = "all" },
+                        label = { Text("全部", fontSize = 12.sp) }
+                    )
+                }
+                items(allCategories) { cat ->
                     val catColor = Color(cat.color)
                     FilterChip(
                         selected = activeCategory == cat.id,
@@ -169,6 +177,24 @@ fun TimelineScreen() {
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         }
+                                        if (record.photos.isNotEmpty()) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                record.photos.take(3).forEach { url ->
+                                                    Card(
+                                                        modifier = Modifier.size(48.dp),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        AsyncImage(
+                                                            model = url,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.Crop
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
                                         if (record.tags.isNotEmpty()) {
                                             Spacer(Modifier.height(6.dp))
                                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -230,7 +256,7 @@ fun TimelineScreen() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AddRecordDialog(
     initialData: TimelineRecord?,
@@ -238,16 +264,27 @@ private fun AddRecordDialog(
     onSave: (TimelineRecord) -> Unit
 ) {
     val context = LocalContext.current
-    val now = LocalDate.now()
-    val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val cal = Calendar.getInstance()
 
-    var date by remember { mutableStateOf(initialData?.date ?: now.format(fmt)) }
+    // Fix 5: Default to current date and time
+    var date by remember {
+        mutableStateOf(initialData?.date ?: "%04d-%02d-%02d".format(
+            cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+        ))
+    }
+    var timeStr by remember {
+        mutableStateOf("%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)))
+    }
     var title by remember { mutableStateOf(initialData?.title ?: "") }
     var description by remember { mutableStateOf(initialData?.description ?: "") }
     var category by remember { mutableStateOf(initialData?.category ?: "milestone") }
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
 
+    // Fix 5: Photo selection
+    var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
+
     val allCategories = DataManager.allCategories
+
     val defaultTags = remember(category) {
         when (category) {
             "milestone" -> listOf("翻身", "学坐", "学爬", "学走", "说话")
@@ -257,6 +294,14 @@ private fun AddRecordDialog(
             "play" -> listOf("玩具", "户外", "游戏", "阅读")
             "growth" -> listOf("身高", "体重", "头围", "出牙")
             else -> emptyList()
+        }
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && selectedPhotos.size < 4) {
+            selectedPhotos = selectedPhotos + uri.toString()
         }
     }
 
@@ -271,19 +316,43 @@ private fun AddRecordDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Date picker
-                OutlinedButton(
-                    onClick = {
-                        val d = LocalDate.parse(date)
-                        DatePickerDialog(
-                            context, { _, y, m, day ->
-                                date = "%04d-%02d-%02d".format(y, m + 1, day)
-                            }, d.year, d.monthValue - 1, d.dayOfMonth
-                        ).show()
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                // Fix 5: Date + Time pickers
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(date)
+                    OutlinedButton(
+                        onClick = {
+                            val d = LocalDate.parse(date)
+                            android.app.DatePickerDialog(
+                                context, { _, y, m, day ->
+                                    date = "%04d-%02d-%02d".format(y, m + 1, day)
+                                }, d.year, d.monthValue - 1, d.dayOfMonth
+                            ).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(date, fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val parts = timeStr.split(":")
+                            val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
+                            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                            TimePickerDialog(
+                                context, { _, hour, minute ->
+                                    timeStr = "%02d:%02d".format(hour, minute)
+                                }, h, m, true
+                            ).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Schedule, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(timeStr, fontSize = 12.sp)
+                    }
                 }
 
                 // Title
@@ -304,36 +373,74 @@ private fun AddRecordDialog(
                     minLines = 3
                 )
 
-                // Category
+                // Fix 6: FlowRow for categories
                 Text("分类", style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    allCategories.chunked(3).forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    allCategories.forEach { cat ->
+                        val catColor = Color(cat.color)
+                        FilterChip(
+                            selected = category == cat.id,
+                            onClick = { category = cat.id },
+                            label = { Text(cat.label, fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = catColor.copy(alpha = 0.3f),
+                                selectedLabelColor = catColor
+                            )
+                        )
+                    }
+                }
+
+                // Fix 5: Photo selection area
+                Text("照片 (${selectedPhotos.size}/4)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    selectedPhotos.forEach { uri ->
+                        Box(
+                            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp))
                         ) {
-                            row.forEach { cat ->
-                                val catColor = Color(cat.color)
-                                FilterChip(
-                                    selected = category == cat.id,
-                                    onClick = { category = cat.id },
-                                    label = { Text(cat.label, fontSize = 11.sp) },
-                                    modifier = Modifier.weight(1f),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = catColor.copy(alpha = 0.3f),
-                                        selectedLabelColor = catColor
-                                    )
-                                )
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
+                                modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            ) {
+                                Icon(Icons.Default.Close, null,
+                                    Modifier.size(12.dp), tint = Color.White)
                             }
-                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                    if (selectedPhotos.size < 4) {
+                        OutlinedButton(
+                            onClick = { imagePicker.launch("image/*") },
+                            modifier = Modifier.size(72.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, Modifier.size(24.dp),
+                                tint = Color(0xFFEC407A))
                         }
                     }
                 }
 
                 // Tags
                 if (tags.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         tags.forEach { tag ->
                             InputChip(
                                 selected = true,
@@ -349,7 +456,10 @@ private fun AddRecordDialog(
                 if (defaultTags.isNotEmpty()) {
                     val suggested = defaultTags.filter { it !in tags }.take(5)
                     if (suggested.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             suggested.forEach { tag ->
                                 AssistChip(
                                     onClick = { tags = tags + tag },
@@ -371,7 +481,8 @@ private fun AddRecordDialog(
                             title = title.trim(),
                             description = description.trim(),
                             category = category,
-                            tags = tags
+                            tags = tags,
+                            photos = selectedPhotos
                         ))
                     }
                 },
