@@ -1,6 +1,5 @@
 package com.yueming.baby.ui.screens
 
-import android.app.DatePickerDialog
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,7 +31,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -441,6 +442,7 @@ private fun BabyInfoSheet(
 ) {
     var form by remember { mutableStateOf(babyInfo) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -491,12 +493,7 @@ private fun BabyInfoSheet(
                 shape = RoundedCornerShape(12.dp)
             )
             OutlinedButton(
-                onClick = {
-                    val d = LocalDate.parse(form.birthDate)
-                    DatePickerDialog(context, { _, y, m, day ->
-                        form = form.copy(birthDate = "%04d-%02d-%02d".format(y, m + 1, day))
-                    }, d.year, d.monthValue - 1, d.dayOfMonth).show()
-                },
+                onClick = { showDatePicker = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -548,6 +545,16 @@ private fun BabyInfoSheet(
         }
     }
 
+    if (showDatePicker) {
+        SettingsDatePicker(
+            initialDate = LocalDate.parse(form.birthDate),
+            onDateSelected = { selectedDate ->
+                form = form.copy(birthDate = "%04d-%02d-%02d".format(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth))
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -577,6 +584,7 @@ private fun AddBabySheet(
     var nickname by remember { mutableStateOf("") }
     var birthDate by remember { mutableStateOf("2025-01-01") }
     var gender by remember { mutableStateOf("girl") }
+    var showDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     ModalBottomSheet(
@@ -599,12 +607,7 @@ private fun AddBabySheet(
                 shape = RoundedCornerShape(12.dp)
             )
             OutlinedButton(
-                onClick = {
-                    val d = LocalDate.parse(birthDate)
-                    DatePickerDialog(context, { _, y, m, day ->
-                        birthDate = "%04d-%02d-%02d".format(y, m + 1, day)
-                    }, d.year, d.monthValue - 1, d.dayOfMonth).show()
-                },
+                onClick = { showDatePicker = true },
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
             ) { Text("出生日期: $birthDate") }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -627,6 +630,16 @@ private fun AddBabySheet(
                 shape = RoundedCornerShape(16.dp)
             ) { Text("添加", color = Color.White) }
         }
+    }
+
+    if (showDatePicker) {
+        SettingsDatePicker(
+            initialDate = LocalDate.parse(birthDate),
+            onDateSelected = { selectedDate ->
+                birthDate = "%04d-%02d-%02d".format(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth)
+            },
+            onDismiss = { showDatePicker = false }
+        )
     }
 }
 
@@ -847,7 +860,7 @@ private fun AIProfileEditForm(
             Row(
                 Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { form = form.copy(model = model.id) }
+                    .clickable { form = form.copy(model = model.id, apiBaseUrl = model.apiBase) }
                     .background(if (form.model == model.id) Color(0xFFEC407A).copy(alpha = 0.1f) else Color.Transparent)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -870,14 +883,33 @@ private fun AIProfileEditForm(
             shape = RoundedCornerShape(12.dp)
         )
 
-        Text("温度: %.1f".format(form.temperature),
-            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-        Slider(
-            value = form.temperature, onValueChange = { form = form.copy(temperature = it) },
-            valueRange = 0f..2f,
-            steps = 19,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Column {
+            Text("温度: %.1f".format(form.temperature),
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            Text("0=精确严谨，1=平衡，2=创意发散。育儿建议推荐0.7-1.0",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            Slider(
+                value = form.temperature, onValueChange = { form = form.copy(temperature = it) },
+                valueRange = 0f..2f,
+                steps = 19,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column {
+            Text("Top-P: %.2f".format(form.topP),
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            Text("核采样概率，通常与温度二选一调整",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            Slider(
+                value = form.topP, onValueChange = { form = form.copy(topP = it) },
+                valueRange = 0f..1f,
+                steps = 19,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         Row(
             Modifier.fillMaxWidth(),
@@ -898,6 +930,9 @@ private fun AIProfileEditForm(
                 shape = RoundedCornerShape(8.dp)
             ) { Text("切换", fontSize = 11.sp) }
         }
+        Text("单次回复的最大字数。2048≈1500汉字，4096≈3000汉字。值越大回复越长，但响应更慢。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
 
         testResult?.let {
             Text(it, style = MaterialTheme.typography.labelSmall,
@@ -1086,9 +1121,11 @@ private fun WebDavConfigSheet(
     var url by remember { mutableStateOf(currentConfig?.url ?: "") }
     var username by remember { mutableStateOf(currentConfig?.username ?: "") }
     var password by remember { mutableStateOf(currentConfig?.password ?: "") }
+    var backupPath by remember { mutableStateOf(currentConfig?.backupPath ?: "/sata1-15529232180/yueming-backups/") }
     var showPassword by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
+    var dirContents by remember { mutableStateOf<List<String>>(emptyList()) }
     val context = LocalContext.current
 
     ModalBottomSheet(
@@ -1126,10 +1163,35 @@ private fun WebDavConfigSheet(
                     }
                 }
             )
+            OutlinedTextField(
+                value = backupPath, onValueChange = { backupPath = it },
+                label = { Text("备份路径") },
+                placeholder = { Text("/path/to/backups/") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
 
             testResult?.let {
-                Text(it, style = MaterialTheme.typography.labelSmall,
-                    color = if (it.contains("成功")) Color(0xFF4CAF50) else Color(0xFFEF5350))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (it.contains("连接成功")) {
+                        Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp), tint = Color(0xFF4CAF50))
+                    } else {
+                        Icon(Icons.Default.Cancel, null, Modifier.size(16.dp), tint = Color(0xFFEF5350))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, style = MaterialTheme.typography.labelSmall,
+                        color = if (it.contains("连接成功")) Color(0xFF4CAF50) else Color(0xFFEF5350))
+                }
+                if (dirContents.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text("备份目录内容 (${dirContents.size} 个文件):",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    dirContents.take(5).forEach { file ->
+                        Text("  • $file", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    }
+                }
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1138,13 +1200,16 @@ private fun WebDavConfigSheet(
                         if (url.isNotBlank()) {
                             isTesting = true
                             testResult = null
-                            val config = WebDavManager.WebDavConfig(url.trim(), username, password)
+                            dirContents = emptyList()
+                            val config = WebDavManager.WebDavConfig(url.trim(), username, password, backupPath.trim())
                             DataManager.testWebDavConnection(config) { result ->
                                 isTesting = false
-                                testResult = result.fold(
-                                    onSuccess = { "连接成功!" },
-                                    onFailure = { "连接失败: ${it.message}" }
-                                )
+                                result.onSuccess { testRes ->
+                                    testResult = if (testRes.success) "连接成功" else testRes.message
+                                    dirContents = testRes.directoryContents
+                                }.onFailure {
+                                    testResult = "连接失败: ${it.message}"
+                                }
                             }
                         }
                     },
@@ -1159,7 +1224,7 @@ private fun WebDavConfigSheet(
                 Button(
                     onClick = {
                         if (url.isNotBlank()) {
-                            onSave(WebDavManager.WebDavConfig(url.trim(), username, password))
+                            onSave(WebDavManager.WebDavConfig(url.trim(), username, password, backupPath.trim()))
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -1234,5 +1299,33 @@ private fun RestoreSheet(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsDatePicker(
+    initialDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDate.toEpochDay() * 86400000L
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                datePickerState.selectedDateMillis?.let { millis ->
+                    onDateSelected(
+                        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    )
+                }
+                onDismiss()
+            }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    ) {
+        DatePicker(state = datePickerState)
     }
 }

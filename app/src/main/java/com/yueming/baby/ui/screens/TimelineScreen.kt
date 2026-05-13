@@ -4,6 +4,8 @@ import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,8 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.UUID
@@ -143,9 +147,10 @@ fun TimelineScreen() {
                                 HorizontalDivider(Modifier.weight(1f))
                             }
                         }
-                        items(records) { record ->
+                        items(records, key = { it.id }) { record ->
                             val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
                             ElevatedCard(
+                                modifier = Modifier.animateItem(),
                                 shape = RoundedCornerShape(20.dp),
                                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
                                 colors = CardDefaults.elevatedCardColors(
@@ -286,6 +291,7 @@ private fun AddRecordDialog(
     var category by remember { mutableStateOf(initialData?.category ?: "milestone") }
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
     var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     val allCategories = DataManager.allCategories
 
@@ -325,12 +331,7 @@ private fun AddRecordDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = {
-                            val d = LocalDate.parse(date)
-                            android.app.DatePickerDialog(context, { _, y, m, day ->
-                                date = "%04d-%02d-%02d".format(y, m + 1, day)
-                            }, d.year, d.monthValue - 1, d.dayOfMonth).show()
-                        },
+                        onClick = { showDatePicker = true },
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
@@ -455,4 +456,42 @@ private fun AddRecordDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
+
+    if (showDatePicker) {
+        YueMingTimelineDatePicker(
+            initialDate = LocalDate.parse(date),
+            onDateSelected = { selectedDate ->
+                date = "%04d-%02d-%02d".format(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth)
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun YueMingTimelineDatePicker(
+    initialDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDate.toEpochDay() * 86400000L
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                datePickerState.selectedDateMillis?.let { millis ->
+                    onDateSelected(
+                        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    )
+                }
+                onDismiss()
+            }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    ) {
+        DatePicker(state = datePickerState)
+    }
 }

@@ -37,7 +37,7 @@ object DataManager {
     private val _babies = MutableStateFlow<List<BabyInfo>>(emptyList())
     val babies: StateFlow<List<BabyInfo>> = _babies.asStateFlow()
 
-    private val _activeBaby = MutableStateFlow(sampleBaby)
+    private val _activeBaby = MutableStateFlow(BabyInfo())
     val activeBaby: StateFlow<BabyInfo> = _activeBaby.asStateFlow()
 
     val activeBabyId: String get() = _activeBaby.value.id
@@ -45,10 +45,10 @@ object DataManager {
     // Legacy alias for backward compatibility
     val babyInfo: StateFlow<BabyInfo> = _activeBaby.asStateFlow()
 
-    private val _timeline = MutableStateFlow(sampleTimeline.toMutableList())
+    private val _timeline = MutableStateFlow<List<TimelineRecord>>(emptyList())
     val timeline: StateFlow<List<TimelineRecord>> = _timeline.asStateFlow()
 
-    private val _photos = MutableStateFlow(samplePhotos.toMutableList())
+    private val _photos = MutableStateFlow<List<PhotoEntry>>(emptyList())
     val photos: StateFlow<List<PhotoEntry>> = _photos.asStateFlow()
 
     private val _customCategories = MutableStateFlow(emptyList<CategoryConfig>())
@@ -523,7 +523,7 @@ object DataManager {
         }
     }
 
-    fun testWebDavConnection(config: WebDavManager.WebDavConfig, onResult: (Result<Boolean>) -> Unit) {
+    fun testWebDavConnection(config: WebDavManager.WebDavConfig, onResult: (Result<WebDavManager.ConnectionTestResult>) -> Unit) {
         appScope.launch {
             val result = WebDavManager.testConnection(config)
             withContext(Dispatchers.Main) { onResult(result) }

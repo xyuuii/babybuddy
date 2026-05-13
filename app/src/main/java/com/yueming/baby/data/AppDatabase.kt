@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [TimelineEntity::class, PhotoEntity::class, BabyEntity::class, SettingsEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -29,6 +29,12 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // No schema changes for this version; just preserving user data
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -36,7 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "yueming.db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_2_3)
                     .addCallback(PrepopulateCallback())
                     .build()
                     .also { INSTANCE = it }
@@ -48,9 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
                 super.onCreate(db)
                 CoroutineScope(Dispatchers.IO).launch {
                     INSTANCE?.let { database ->
-                        // Check if already has data
-                        val existing = database.babyDao().getAllBabies()
-                        if (existing.isEmpty()) {
+                        if (database.timelineDao().count() == 0) {
                             // Insert sample baby
                             val baby = BabyEntity(
                                 name = sampleBaby.name,

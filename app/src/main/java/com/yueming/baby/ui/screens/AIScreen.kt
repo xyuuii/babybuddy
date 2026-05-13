@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +38,25 @@ fun AIScreen() {
     val scope = rememberCoroutineScope()
 
     val ageMonths = DataManager.getAgeInMonths(babyInfo.birthDate)
+    val ageDays = DataManager.getAgeInDays(babyInfo.birthDate)
+
+    // Build baby context for system prompt
+    val babyContext = remember(babyInfo, timeline) {
+        val recentRecords = timeline
+            .sortedByDescending { it.date }
+            .take(3)
+            .joinToString("\n") { "- ${it.date}: ${it.title} (${it.category})" }
+        """
+宝宝信息：
+- 名字：${babyInfo.name}（昵称：${babyInfo.nickname}）
+- 性别：${if (babyInfo.gender == "boy") "男孩" else "女孩"}
+- 出生日期：${babyInfo.birthDate}
+- 当前年龄：${ageMonths}个月（${ageDays}天）
+
+最近3条时间线记录：
+${recentRecords.ifBlank { "暂无记录" }}
+        """.trimIndent()
+    }
 
     if (!isConfigured) {
         Box(
@@ -137,9 +156,31 @@ fun AIScreen() {
                             Text("${babyInfo.nickname}现在 ${ageMonths} 个月了",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
                             Text("向我提问，我会基于成长数据给出建议",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            Spacer(Modifier.height(16.dp))
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("已注入宝宝信息作为上下文",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        babyContext.take(200) + if (babyContext.length > 200) "..." else "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -194,10 +235,19 @@ fun AIScreen() {
                 shape = RoundedCornerShape(20.dp)
             )
             IconButton(
-                onClick = { /* AI send placeholder - requires network implementation */ },
+                onClick = {
+                    val userMsg = ChatMessage(
+                        id = "msg-${System.currentTimeMillis()}",
+                        role = "user",
+                        content = input.trim(),
+                        timestamp = System.currentTimeMillis()
+                    )
+                    DataManager.addMessage(userMsg)
+                    input = ""
+                },
                 enabled = !isLoading && input.isNotBlank()
             ) {
-                Icon(Icons.Default.Send, null,
+                Icon(Icons.AutoMirrored.Filled.Send, null,
                     tint = if (input.isNotBlank()) Color(0xFFEC407A)
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
             }
