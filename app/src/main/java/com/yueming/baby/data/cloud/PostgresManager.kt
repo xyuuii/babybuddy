@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.Properties
 
 object PostgresManager {
     private var connection: Connection? = null
@@ -20,7 +21,13 @@ object PostgresManager {
         try {
             config = cfg
             Class.forName("org.postgresql.Driver")
-            val conn = DriverManager.getConnection(getJdbcUrl(), config.username, config.password)
+            val props = Properties().apply {
+                setProperty("user", config.username)
+                setProperty("password", config.password)
+                setProperty("connectTimeout", "5")
+                setProperty("socketTimeout", "10")
+            }
+            val conn = DriverManager.getConnection(getJdbcUrl(), props)
             connection = conn
             createTablesIfNeeded(conn)
             Result.success(true)
