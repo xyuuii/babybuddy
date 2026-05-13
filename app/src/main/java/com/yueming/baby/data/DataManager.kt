@@ -576,6 +576,9 @@ object DataManager {
 
                 onProgress("正在打包...")
                 val zipBytes = createBackupZip(jsonBytes, activeBabyId)
+                if (zipBytes.isEmpty()) throw Exception("备份数据为空")
+
+                android.util.Log.d("DataManager", "Backup zip: ${zipBytes.size} bytes")
 
                 val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss", java.util.Locale.getDefault())
                     .format(java.util.Date())

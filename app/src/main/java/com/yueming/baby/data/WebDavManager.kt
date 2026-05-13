@@ -67,14 +67,21 @@ object WebDavManager {
             val dirUrl = buildBackupUrl(config)
             val fullUrl = "${dirUrl.trimEnd('/')}/$filename"
 
+            android.util.Log.d("WebDavManager", "Uploading ${data.size} bytes to $fullUrl")
+
             // Create directory first via MKCOL
             createDirectory(config, dirUrl)
 
-            val mediaType = "application/zip".toMediaType()
-            val request = buildRequest(config, fullUrl, "PUT")
-                .put(data.toRequestBody(mediaType))
+            val credential = Credentials.basic(config.username, config.password)
+            val request = Request.Builder()
+                .url(fullUrl)
+                .header("Authorization", credential)
+                .header("User-Agent", "YueMing-Android")
+                .put(data.toRequestBody("application/zip".toMediaType()))
                 .build()
+
             val response = client.newCall(request).execute()
+            android.util.Log.d("WebDavManager", "Upload response: ${response.code}")
             Result.success(response.isSuccessful)
         } catch (e: Exception) {
             Result.failure(Exception("上传备份失败: ${e.message}"))
