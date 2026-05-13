@@ -543,7 +543,7 @@ private fun BabyInfoSheet(
                 ) {
                     Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("删除宝宝", color = Color(0xFFEF5350))
+                    Text("删除信息", color = Color(0xFFEF5350))
                 }
             }
         }

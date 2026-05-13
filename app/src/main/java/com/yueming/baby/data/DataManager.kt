@@ -37,12 +37,22 @@ object DataManager {
     fun copyVideoToInternalStorage(uri: android.net.Uri): String? {
         val context = appContext ?: return null
         return try {
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
             val videoDir = java.io.File(context.filesDir, "videos").also { it.mkdirs() }
-            val videoFile = java.io.File(videoDir, "video-${java.util.UUID.randomUUID()}.mp4")
-            inputStream.use { input ->
-                videoFile.outputStream().use { output -> input.copyTo(output) }
+            val ext = context.contentResolver.getType(uri)?.let { mime ->
+                when {
+                    mime.contains("mp4") -> ".mp4"
+                    mime.contains("webm") -> ".webm"
+                    mime.contains("3gpp") -> ".3gp"
+                    else -> ".mp4"
+                }
+            } ?: ".mp4"
+            val videoFile = java.io.File(videoDir, "video-${java.util.UUID.randomUUID()}$ext")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                videoFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
+            android.util.Log.d("DataManager", "Video copied to: ${videoFile.absolutePath}")
             videoFile.absolutePath
         } catch (e: Exception) {
             android.util.Log.e("DataManager", "Failed to copy video", e)
@@ -104,8 +114,11 @@ object DataManager {
         if (db != null) return
         appContext = context.applicationContext
         db = AppDatabase.getInstance(context.applicationContext)
+        android.util.Log.d("DataManager", "Database initialized, starting data load...")
         appScope.launch {
             loadFromRoom()
+            android.util.Log.d("DataManager",
+                "Data loaded. Babies: ${_babies.value.size}, Timeline: ${_timeline.value.size}, Photos: ${_photos.value.size}")
         }
     }
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -254,18 +255,14 @@ fun PhotosScreen() {
                                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                AsyncImage(model = photo.url, contentDescription = photo.caption,
-                                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                                 if (photo.tags.contains("视频")) {
-                                                    Icon(
-                                                        Icons.Default.PlayArrow,
-                                                        contentDescription = null,
-                                                        modifier = Modifier
-                                                            .size(24.dp)
-                                                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                                            .padding(2.dp),
-                                                        tint = Color.White
+                                                    VideoThumbnail(
+                                                        filePath = photo.url,
+                                                        modifier = Modifier.fillMaxSize()
                                                     )
+                                                } else {
+                                                    AsyncImage(model = photo.url, contentDescription = photo.caption,
+                                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                                 }
                                             }
                                         }

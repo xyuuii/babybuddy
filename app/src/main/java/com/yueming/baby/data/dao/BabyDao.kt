@@ -21,6 +21,9 @@ interface BabyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(baby: BabyEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfNotExists(baby: BabyEntity)
+
     @Query("DELETE FROM babies WHERE id = :id")
     suspend fun deleteById(id: String)
 
@@ -32,4 +35,7 @@ interface BabyDao {
 
     @Query("UPDATE babies SET isActive = 1 WHERE id = :id")
     suspend fun setActive(id: String)
+
+    @Query("SELECT COUNT(*) FROM babies")
+    suspend fun count(): Int
 }

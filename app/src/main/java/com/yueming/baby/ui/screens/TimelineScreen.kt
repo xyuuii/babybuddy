@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -208,23 +209,10 @@ fun TimelineScreen() {
                                                         shape = RoundedCornerShape(10.dp),
                                                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                                                     ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            AsyncImage(
-                                                                model = path,
-                                                                contentDescription = null,
-                                                                modifier = Modifier.fillMaxSize(),
-                                                                contentScale = ContentScale.Crop
-                                                            )
-                                                            Icon(
-                                                                Icons.Default.PlayArrow,
-                                                                contentDescription = null,
-                                                                modifier = Modifier
-                                                                    .size(20.dp)
-                                                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                                                                    .padding(2.dp),
-                                                                tint = Color.White
-                                                            )
-                                                        }
+                                                        VideoThumbnail(
+                                                            filePath = path,
+                                                            modifier = Modifier.fillMaxSize()
+                                                        )
                                                     }
                                                 }
                                             }
@@ -462,21 +450,9 @@ private fun AddRecordDialog(
                 ) {
                     selectedVideos.forEach { path ->
                         Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
-                            AsyncImage(
-                                model = path,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .size(24.dp)
-                                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-                                    .padding(2.dp),
-                                tint = Color.White
+                            VideoThumbnail(
+                                filePath = path,
+                                modifier = Modifier.fillMaxSize()
                             )
                             IconButton(
                                 onClick = { selectedVideos = selectedVideos.filter { it != path } },

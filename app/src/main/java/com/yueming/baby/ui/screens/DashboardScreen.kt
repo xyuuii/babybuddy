@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.LocalDate
 import java.util.UUID
 
@@ -695,17 +696,9 @@ private fun GrowthEntrySheet(
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.TopEnd
                     ) {
-                        AsyncImage(model = path, contentDescription = null,
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(20.dp)
-                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                                .padding(2.dp),
-                            tint = Color.White
+                        VideoThumbnail(
+                            filePath = path,
+                            modifier = Modifier.fillMaxSize()
                         )
                         IconButton(
                             onClick = { selectedVideos = selectedVideos.filter { it != path } },
@@ -996,17 +989,9 @@ private fun MilestoneEntrySheet(
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.TopEnd
                     ) {
-                        AsyncImage(model = path, contentDescription = null,
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(20.dp)
-                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                                .padding(2.dp),
-                            tint = Color.White
+                        VideoThumbnail(
+                            filePath = path,
+                            modifier = Modifier.fillMaxSize()
                         )
                         IconButton(
                             onClick = { selectedVideos = selectedVideos.filter { it != path } },

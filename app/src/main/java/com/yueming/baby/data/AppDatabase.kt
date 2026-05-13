@@ -54,8 +54,9 @@ abstract class AppDatabase : RoomDatabase() {
                 super.onCreate(db)
                 CoroutineScope(Dispatchers.IO).launch {
                     INSTANCE?.let { database ->
-                        if (database.timelineDao().count() == 0) {
-                            // Insert sample baby
+                        // Double check: both timeline and baby tables must be empty
+                        if (database.timelineDao().count() == 0 && database.babyDao().count() == 0) {
+                            // Insert sample baby using insertIfNotExists to avoid overwriting user data
                             val baby = BabyEntity(
                                 name = sampleBaby.name,
                                 nickname = sampleBaby.nickname,
@@ -63,7 +64,7 @@ abstract class AppDatabase : RoomDatabase() {
                                 gender = sampleBaby.gender,
                                 avatarUri = sampleBaby.avatar
                             )
-                            database.babyDao().upsert(baby)
+                            database.babyDao().insertIfNotExists(baby)
                             val babyId = baby.id
 
                             // Insert sample timeline
