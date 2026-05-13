@@ -11,8 +11,8 @@ import com.yueming.baby.data.entity.*
 import com.google.gson.Gson
 
 @Deprecated(
-    message = "Room database has been replaced by PostgreSQL cloud backend (PostgresManager).",
-    replaceWith = ReplaceWith("PostgresManager", "com.yueming.baby.data.cloud.PostgresManager")
+    message = "Room database has been replaced by WebDAV cloud backend (DataManager).",
+    replaceWith = ReplaceWith("DataManager", "com.yueming.baby.data.DataManager")
 )
 @Database(
     entities = [TimelineEntity::class, PhotoEntity::class, BabyEntity::class, SettingsEntity::class],

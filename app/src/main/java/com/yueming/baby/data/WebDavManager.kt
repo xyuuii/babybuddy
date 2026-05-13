@@ -156,6 +156,90 @@ object WebDavManager {
         }
     }
 
+    // --- JSON Data Operations ---
+
+    suspend fun readJson(config: WebDavConfig, remotePath: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = buildAbsoluteUrl(config, remotePath)
+            val request = buildRequest(config, fullUrl, "GET").build()
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                Result.success(response.body?.string() ?: "")
+            } else if (response.code == 404) {
+                Result.failure(NotFoundException("文件不存在: $remotePath"))
+            } else {
+                Result.failure(Exception("读取失败: HTTP ${response.code}"))
+            }
+        } catch (e: NotFoundException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(Exception("读取JSON失败: ${e.message}"))
+        }
+    }
+
+    suspend fun writeJson(config: WebDavConfig, remotePath: String, json: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = buildAbsoluteUrl(config, remotePath)
+            // Ensure parent directory exists
+            val parentPath = remotePath.substringBeforeLast("/", "")
+            if (parentPath.isNotEmpty()) {
+                createDirectoryChain(config, parentPath)
+            }
+            val request = Request.Builder()
+                .url(fullUrl)
+                .header("Authorization", Credentials.basic(config.username, config.password))
+                .header("User-Agent", "YueMing-Android")
+                .put(json.toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            Result.success(response.isSuccessful)
+        } catch (e: Exception) {
+            Result.failure(Exception("写入JSON失败: ${e.message}"))
+        }
+    }
+
+    suspend fun uploadFile(config: WebDavConfig, remotePath: String, data: ByteArray, mimeType: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = buildAbsoluteUrl(config, remotePath)
+            val parentPath = remotePath.substringBeforeLast("/", "")
+            if (parentPath.isNotEmpty()) {
+                createDirectoryChain(config, parentPath)
+            }
+            val request = Request.Builder()
+                .url(fullUrl)
+                .header("Authorization", Credentials.basic(config.username, config.password))
+                .header("User-Agent", "YueMing-Android")
+                .put(data.toRequestBody(mimeType.toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            Result.success(response.isSuccessful)
+        } catch (e: Exception) {
+            Result.failure(Exception("上传文件失败: ${e.message}"))
+        }
+    }
+
+    suspend fun createDirectoryChain(config: WebDavConfig, dirPath: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val parts = dirPath.trimEnd('/').split("/").filter { it.isNotEmpty() }
+            var current = normalizeUrl(config.url)
+            for (part in parts) {
+                current = "$current/$part".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
+                createDirectory(config, current)
+            }
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private class NotFoundException(message: String) : Exception(message)
+
+    private fun buildAbsoluteUrl(config: WebDavConfig, remotePath: String): String {
+        val url = normalizeUrl(config.url)
+        val path = if (remotePath.startsWith("/")) remotePath else "/$remotePath"
+        return "$url$path".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
+    }
+
     private fun parsePropfindResponse(xml: String): List<String> {
         val result = mutableListOf<String>()
         try {

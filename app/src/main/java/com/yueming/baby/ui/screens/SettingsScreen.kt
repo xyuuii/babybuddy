@@ -35,7 +35,6 @@ import com.yueming.baby.data.*
 import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
-import com.yueming.baby.data.cloud.PostgresManager
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -64,8 +63,6 @@ fun SettingsScreen() {
     var showWebDavSheet by remember { mutableStateOf(false) }
     var showRestoreSheet by remember { mutableStateOf(false) }
     var showCloudStorageSheet by remember { mutableStateOf(false) }
-    var showDatabaseSheet by remember { mutableStateOf(false) }
-
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -121,32 +118,6 @@ fun SettingsScreen() {
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                    Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                }
-            }
-        }
-
-        // ---- Database Config Group ----
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { showDatabaseSheet = true },
-                shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-            ) {
-                Row(
-                    Modifier.padding(20.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Dns, null, Modifier.size(20.dp), tint = Color(0xFFAB47BC))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("数据库配置", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text("PostgreSQL",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
@@ -435,13 +406,6 @@ fun SettingsScreen() {
             currentConfig = cloudStorageConfig,
             onDismiss = { showCloudStorageSheet = false },
             onSave = { config -> DataManager.saveCloudStorageConfig(config) }
-        )
-    }
-
-    // Database Config Sheet
-    if (showDatabaseSheet) {
-        DatabaseConfigSheet(
-            onDismiss = { showDatabaseSheet = false }
         )
     }
 
@@ -1661,143 +1625,6 @@ private fun CloudStorageConfigSheet(
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF42A5F5)),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("保存", color = Color.White) }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DatabaseConfigSheet(
-    onDismiss: () -> Unit
-) {
-    var host by remember { mutableStateOf("192.168.0.28") }
-    var port by remember { mutableStateOf("15432") }
-    var database by remember { mutableStateOf("maindb") }
-    var username by remember { mutableStateOf("dbadmin") }
-    var password by remember { mutableStateOf("Db@Admin#2026!Pg") }
-    var schema by remember { mutableStateOf("yueming") }
-    var showPassword by remember { mutableStateOf(false) }
-    var isTesting by remember { mutableStateOf(false) }
-    var testResult by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("数据库配置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-            ) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("PostgreSQL 连接", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary)
-
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = host, onValueChange = { host = it },
-                            label = { Text("主机") },
-                            modifier = Modifier.weight(2f), singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        OutlinedTextField(
-                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() } },
-                            label = { Text("端口") },
-                            modifier = Modifier.weight(1f), singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    }
-                    OutlinedTextField(
-                        value = database, onValueChange = { database = it },
-                        label = { Text("数据库") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = schema, onValueChange = { schema = it },
-                        label = { Text("Schema") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = username, onValueChange = { username = it },
-                        label = { Text("用户名") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = password, onValueChange = { password = it },
-                        label = { Text("密码") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showPassword = !showPassword }) {
-                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
-                            }
-                        }
-                    )
-                }
-            }
-
-            testResult?.let {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val success = it.contains("成功")
-                    Icon(
-                        if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
-                        null, Modifier.size(16.dp),
-                        tint = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(it, style = MaterialTheme.typography.labelSmall,
-                        color = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350))
-                }
-            }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = {
-                        if (host.isNotBlank()) {
-                            isTesting = true
-                            testResult = null
-                            val config = com.yueming.baby.data.cloud.PostgresConfig(
-                                host = host.trim(), port = port.toIntOrNull() ?: 15432,
-                                database = database.trim(), username = username,
-                                password = password, schema = schema.trim()
-                            )
-                            scope.launch {
-                                val result = PostgresManager.initialize(config)
-                                isTesting = false
-                                testResult = result.fold(
-                                    onSuccess = { "连接成功" },
-                                    onFailure = { "连接失败: ${it.message}" }
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isTesting,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
-                    Text("测试连接", fontSize = 13.sp)
-                }
-                Button(
-                    onClick = { onDismiss() },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFAB47BC)),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("保存", color = Color.White) }
             }

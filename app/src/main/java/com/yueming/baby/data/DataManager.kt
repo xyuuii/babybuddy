@@ -5,9 +5,10 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.CloudStorageConfig
-import com.yueming.baby.data.cloud.PostgresManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -15,7 +16,11 @@ import java.util.zip.ZipOutputStream
 object DataManager {
     private var appContext: Context? = null
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var isCloudInitialized = false
+    private val writeMutex = Mutex()
+
+    // Data paths
+    private const val DATA_PATH = "/sata1-15529232180/yueming/data"
+    private const val MEDIA_PATH = "/sata1-15529232180/yueming/media"
 
     // --- Photo cache helper (copy content URI to temp for upload) ---
     fun copyPhotoToInternalStorage(uri: android.net.Uri): String? {
@@ -111,194 +116,281 @@ object DataManager {
     private val _isBackingUp = MutableStateFlow(false)
     val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
 
+    // --- WebDAV Config helper ---
+    private fun getWebDavConfig(): WebDavManager.WebDavConfig {
+        val wd = _webDavConfig.value
+        if (wd != null) return wd
+        val cs = _cloudStorageConfig.value
+        return WebDavManager.WebDavConfig(
+            url = "${cs.host}:${cs.port}",
+            username = cs.username,
+            password = cs.password,
+            backupPath = cs.webdavPath
+        )
+    }
+
     // --- Initialization ---
     fun init(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        android.util.Log.d("DataManager", "Starting in offline mode")
-        // Default to offline mode. PostgreSQL connection is deferred until
-        // user configures and tests connection from Settings.
-        _babies.value = emptyList()
-        _activeBaby.value = BabyInfo()
-        _themeMode.value = ThemeMode.SYSTEM
+        android.util.Log.d("DataManager", "Initializing with WebDAV backend")
+        appScope.launch {
+            initWebDavData()
+        }
     }
 
-    private suspend fun loadFromPostgres() {
-        val gson = Gson()
+    private suspend fun initWebDavData() {
+        val config = getWebDavConfig()
+        android.util.Log.d("DataManager", "WebDAV: ${config.url}, data path: $DATA_PATH")
 
-        // Load all babies
-        val babiesResult = PostgresManager.getAllBabies()
-        if (babiesResult.isSuccess) {
-            val babyList = babiesResult.getOrThrow()
-            if (babyList.isNotEmpty()) {
-                _babies.value = babyList.map { row ->
-                    BabyInfo(
-                        id = row["id"] as? String ?: "",
-                        name = row["name"] as? String ?: "",
-                        nickname = row["nickname"] as? String ?: "",
-                        birthDate = row["birth_date"] as? String ?: "",
-                        gender = row["gender"] as? String ?: "",
-                        avatar = row["avatar_url"] as? String
-                    )
+        // Ensure directory structure exists
+        WebDavManager.createDirectoryChain(config, DATA_PATH)
+        WebDavManager.createDirectoryChain(config, "$MEDIA_PATH/photos")
+        WebDavManager.createDirectoryChain(config, "$MEDIA_PATH/videos")
+
+        // Load settings first (contains activeBabyId, theme, etc.)
+        loadSettingsFromWebDav(config)
+
+        // Load data files
+        loadBabiesFromWebDav(config)
+        loadTimelineFromWebDav(config)
+        loadPhotosFromWebDav(config)
+        loadAiProfilesFromWebDav(config)
+    }
+
+    private suspend fun loadBabiesFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "$DATA_PATH/babies.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<List<BabyInfo>>() {}.type
+                    val list: List<BabyInfo> = Gson().fromJson(json, type)
+                    if (list.isNotEmpty()) {
+                        _babies.value = list
+                        val activeId = _activeBaby.value.id
+                        val active = if (activeId.isNotEmpty()) {
+                            list.find { it.id == activeId } ?: list.first()
+                        } else list.first()
+                        _activeBaby.value = active
+                        android.util.Log.d("DataManager", "Loaded ${list.size} babies from WebDAV")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse babies.json", e)
+                    _babies.value = emptyList()
+                    _activeBaby.value = BabyInfo()
                 }
-                val activeRow = babyList.firstOrNull { (it["is_active"] as? Boolean) == true }
-                    ?: babyList.first()
-                _activeBaby.value = BabyInfo(
-                    id = activeRow["id"] as? String ?: "",
-                    name = activeRow["name"] as? String ?: "",
-                    nickname = activeRow["nickname"] as? String ?: "",
-                    birthDate = activeRow["birth_date"] as? String ?: "",
-                    gender = activeRow["gender"] as? String ?: "",
-                    avatar = activeRow["avatar_url"] as? String
-                )
-            } else {
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "babies.json not found, starting fresh")
                 _babies.value = emptyList()
                 _activeBaby.value = BabyInfo()
             }
-        }
-
-        // Load baby data
-        loadBabyDataFromPostgres()
-        loadGlobalSettingsFromPostgres()
+        )
     }
 
-    private suspend fun loadBabyDataFromPostgres() {
-        val babyId = _activeBaby.value.id
-        val gson = Gson()
-
-        if (babyId.isEmpty()) {
-            _timeline.value = emptyList()
-            _photos.value = emptyList()
-            return
-        }
-
-        // Load timeline
-        val timelineResult = PostgresManager.getAllTimelineByBaby(babyId)
-        if (timelineResult.isSuccess) {
-            _timeline.value = timelineResult.getOrThrow().map { row ->
-                TimelineRecord(
-                    id = row["id"] as? String ?: "",
-                    babyId = row["baby_id"] as? String ?: "",
-                    date = row["date"] as? String ?: "",
-                    title = row["title"] as? String ?: "",
-                    description = row["description"] as? String ?: "",
-                    category = row["category"] as? String ?: "",
-                    tags = parseJsonList(gson, row["tags"] as? String ?: "[]"),
-                    photos = parseJsonList(gson, row["photos"] as? String ?: "[]"),
-                    videos = parseJsonList(gson, row["videos"] as? String ?: "[]")
-                )
+    private suspend fun loadTimelineFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "$DATA_PATH/timeline.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<List<TimelineRecord>>() {}.type
+                    val list: List<TimelineRecord> = Gson().fromJson(json, type)
+                    _timeline.value = list
+                    android.util.Log.d("DataManager", "Loaded ${list.size} timeline records from WebDAV")
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse timeline.json", e)
+                    _timeline.value = emptyList()
+                }
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "timeline.json not found, starting fresh")
+                _timeline.value = emptyList()
             }
-        }
-
-        // Load photos
-        val photosResult = PostgresManager.getAllPhotosByBaby(babyId)
-        if (photosResult.isSuccess) {
-            _photos.value = photosResult.getOrThrow().map { row ->
-                PhotoEntry(
-                    id = row["id"] as? String ?: "",
-                    babyId = row["baby_id"] as? String ?: "",
-                    url = row["url"] as? String ?: "",
-                    caption = row["caption"] as? String ?: "",
-                    date = row["date"] as? String ?: "",
-                    timelineRecordId = row["timeline_record_id"] as? String,
-                    tags = parseJsonList(gson, row["tags"] as? String ?: "[]")
-                )
-            }
-        }
+        )
     }
 
-    private suspend fun loadGlobalSettingsFromPostgres() {
-        val gson = Gson()
+    private suspend fun loadPhotosFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "$DATA_PATH/photos.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<List<PhotoEntry>>() {}.type
+                    val list: List<PhotoEntry> = Gson().fromJson(json, type)
+                    _photos.value = list
+                    android.util.Log.d("DataManager", "Loaded ${list.size} photos from WebDAV")
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse photos.json", e)
+                    _photos.value = emptyList()
+                }
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "photos.json not found, starting fresh")
+                _photos.value = emptyList()
+            }
+        )
+    }
 
-        // Load custom categories
-        val catResult = PostgresManager.getSetting("custom_categories")
-        if (catResult.isSuccess && catResult.getOrNull() != null) {
+    private suspend fun loadSettingsFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "$DATA_PATH/settings.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<Map<String, String>>() {}.type
+                    val map: Map<String, String> = Gson().fromJson(json, type) ?: emptyMap()
+                    applySettingsMap(map)
+                    android.util.Log.d("DataManager", "Loaded settings from WebDAV")
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse settings.json", e)
+                }
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "settings.json not found, using defaults")
+            }
+        )
+    }
+
+    private suspend fun loadAiProfilesFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "$DATA_PATH/ai_profiles.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<List<AIProfile>>() {}.type
+                    val list: List<AIProfile> = Gson().fromJson(json, type)
+                    _aiProfiles.value = list
+                    android.util.Log.d("DataManager", "Loaded ${list.size} AI profiles from WebDAV")
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse ai_profiles.json", e)
+                    _aiProfiles.value = emptyList()
+                }
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "ai_profiles.json not found, starting fresh")
+                _aiProfiles.value = emptyList()
+            }
+        )
+    }
+
+    private fun applySettingsMap(map: Map<String, String>) {
+        val gson = Gson()
+        map["theme_mode"]?.let {
+            try { _themeMode.value = ThemeMode.valueOf(it) } catch (_: Exception) {}
+        }
+        map["active_baby_id"]?.let { id ->
+            if (id.isNotEmpty()) {
+                _activeBaby.value = _activeBaby.value.copy(id = id)
+            }
+        }
+        map["custom_categories"]?.let {
             try {
                 val type = object : TypeToken<List<CategoryConfig>>() {}.type
-                val cats: List<CategoryConfig> = gson.fromJson(catResult.getOrNull(), type)
-                _customCategories.value = cats.toMutableList()
+                _customCategories.value = gson.fromJson(it, type)
             } catch (_: Exception) {}
         }
-
-        // Load AI config (legacy)
-        val aiResult = PostgresManager.getSetting("ai_config")
-        if (aiResult.isSuccess && aiResult.getOrNull() != null) {
+        map["ai_config"]?.let {
             try {
-                _aiConfig.value = gson.fromJson(aiResult.getOrNull(), AIConfig::class.java)
+                _aiConfig.value = gson.fromJson(it, AIConfig::class.java) ?: AIConfig()
             } catch (_: Exception) {}
         }
+        map["webdav_config"]?.let {
+            try {
+                _webDavConfig.value = gson.fromJson(it, WebDavManager.WebDavConfig::class.java)
+            } catch (_: Exception) {}
+        }
+        map["cloud_storage_config"]?.let {
+            try {
+                _cloudStorageConfig.value = gson.fromJson(it, CloudStorageConfig::class.java)
+            } catch (_: Exception) {}
+        }
+    }
 
-        // Load AI profiles
-        val profilesResult = PostgresManager.getAllAIProfiles()
-        if (profilesResult.isSuccess) {
-            val profileList = profilesResult.getOrThrow()
-            if (profileList.isNotEmpty()) {
-                _aiProfiles.value = profileList.map { row ->
-                    AIProfile(
-                        id = row["id"] as? String ?: "",
-                        name = row["name"] as? String ?: "",
-                        apiBaseUrl = row["api_base_url"] as? String ?: "",
-                        apiKey = row["api_key"] as? String ?: "",
-                        model = row["model"] as? String ?: "",
-                        systemPrompt = row["system_prompt"] as? String ?: "",
-                        temperature = (row["temperature"] as? Number)?.toFloat() ?: 0.7f,
-                        maxTokens = (row["max_tokens"] as? Number)?.toInt() ?: 2048,
-                        isActive = (row["is_active"] as? Boolean) ?: false
-                    )
+    private fun buildSettingsMap(): Map<String, String> {
+        val gson = Gson()
+        return mapOf(
+            "theme_mode" to _themeMode.value.name,
+            "active_baby_id" to _activeBaby.value.id,
+            "custom_categories" to gson.toJson(_customCategories.value),
+            "ai_config" to gson.toJson(_aiConfig.value),
+            "webdav_config" to (_webDavConfig.value?.let { gson.toJson(it) } ?: ""),
+            "cloud_storage_config" to gson.toJson(_cloudStorageConfig.value)
+        )
+    }
+
+    // --- Save helpers (async, serialized via Mutex) ---
+
+    private fun saveBabies() {
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfig()
+                    val json = Gson().toJson(_babies.value)
+                    WebDavManager.writeJson(config, "$DATA_PATH/babies.json", json)
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to save babies", e)
                 }
             }
         }
+    }
 
-        // Migrate legacy AI config if no profiles
-        if (_aiProfiles.value.isEmpty() && _aiConfig.value.apiKey.isNotEmpty()) {
-            val legacyProfile = AIProfile(
-                name = "默认配置",
-                apiBaseUrl = _aiConfig.value.apiBaseUrl,
-                apiKey = _aiConfig.value.apiKey,
-                model = _aiConfig.value.model,
-                isActive = true
-            )
-            _aiProfiles.value = listOf(legacyProfile)
-            persistAIProfiles()
-        }
-
-        // Load theme
-        val themeResult = PostgresManager.getSetting("theme_mode")
-        if (themeResult.isSuccess && themeResult.getOrNull() != null) {
-            try { _themeMode.value = ThemeMode.valueOf(themeResult.getOrNull()!!) } catch (_: Exception) {}
-        }
-
-        // Load WebDAV config
-        val wdResult = PostgresManager.getSetting("webdav_config")
-        if (wdResult.isSuccess && wdResult.getOrNull() != null) {
-            try {
-                _webDavConfig.value = gson.fromJson(wdResult.getOrNull(), WebDavManager.WebDavConfig::class.java)
-            } catch (_: Exception) {}
-        }
-
-        // Load cloud storage config
-        val csResult = PostgresManager.getSetting("cloud_storage_config")
-        if (csResult.isSuccess && csResult.getOrNull() != null) {
-            try {
-                _cloudStorageConfig.value = gson.fromJson(csResult.getOrNull(), CloudStorageConfig::class.java)
-            } catch (_: Exception) {}
+    private fun saveTimeline() {
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfig()
+                    val json = Gson().toJson(_timeline.value)
+                    WebDavManager.writeJson(config, "$DATA_PATH/timeline.json", json)
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to save timeline", e)
+                }
+            }
         }
     }
 
-    private fun parseJsonList(gson: Gson, json: String): List<String> {
-        return try {
-            val type = object : TypeToken<List<String>>() {}.type
-            gson.fromJson(json, type)
-        } catch (_: Exception) { emptyList() }
+    private fun savePhotos() {
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfig()
+                    val json = Gson().toJson(_photos.value)
+                    WebDavManager.writeJson(config, "$DATA_PATH/photos.json", json)
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to save photos", e)
+                }
+            }
+        }
+    }
+
+    private fun saveSettings() {
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfig()
+                    val json = Gson().toJson(buildSettingsMap())
+                    WebDavManager.writeJson(config, "$DATA_PATH/settings.json", json)
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to save settings", e)
+                }
+            }
+        }
+    }
+
+    private fun saveAiProfiles() {
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfig()
+                    val json = Gson().toJson(_aiProfiles.value)
+                    WebDavManager.writeJson(config, "$DATA_PATH/ai_profiles.json", json)
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to save AI profiles", e)
+                }
+            }
+        }
     }
 
     // --- Cloud Storage Config ---
     fun saveCloudStorageConfig(config: CloudStorageConfig) {
         _cloudStorageConfig.value = config
-        appScope.launch {
-            val json = Gson().toJson(config)
-            PostgresManager.upsertSetting("cloud_storage_config", json)
-        }
+        saveSettings()
     }
 
     // --- Baby Management ---
@@ -309,30 +401,17 @@ object DataManager {
             birthDate = info.birthDate, gender = info.gender, avatar = info.avatar
         )
         _babies.value = (_babies.value + baby).toMutableList()
-
-        if (isCloudInitialized) {
-            appScope.launch {
-                PostgresManager.upsertBaby(
-                    id = entityId, name = info.name, nickname = info.nickname,
-                    birthDate = info.birthDate, gender = info.gender,
-                    avatarUrl = info.avatar, isActive = _babies.value.size == 1,
-                    createdAt = System.currentTimeMillis()
-                )
-            }
+        if (_babies.value.size == 1) {
+            _activeBaby.value = baby
         }
+        saveBabies()
     }
 
     fun switchBaby(babyId: String) {
         val babiesList = _babies.value
         val target = babiesList.find { it.id == babyId } ?: return
         _activeBaby.value = target
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deactivateAllBabies()
-                PostgresManager.setActiveBaby(babyId)
-            }
-            loadBabyDataFromPostgres()
-        }
+        saveSettings()
     }
 
     fun deleteBaby(babyId: String, onComplete: () -> Unit) {
@@ -341,27 +420,13 @@ object DataManager {
             return
         }
         _babies.value = _babies.value.filter { it.id != babyId }.toMutableList()
+        saveBabies()
         appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deleteBaby(babyId)
-                PostgresManager.deleteTimelineByBabyId(babyId)
-                PostgresManager.deletePhotosByBabyId(babyId)
-                val remaining = PostgresManager.getAllBabies()
-                if (remaining.isSuccess && remaining.getOrThrow().isNotEmpty()) {
-                    val first = remaining.getOrThrow().first()
-                    val firstId = first["id"] as? String ?: ""
-                    PostgresManager.setActiveBaby(firstId)
-                    withContext(Dispatchers.Main) {
-                        _activeBaby.value = BabyInfo(
-                            id = firstId,
-                            name = first["name"] as? String ?: "",
-                            nickname = first["nickname"] as? String ?: "",
-                            birthDate = first["birth_date"] as? String ?: "",
-                            gender = first["gender"] as? String ?: "",
-                            avatar = first["avatar_url"] as? String
-                        )
-                    }
-                    loadBabyDataFromPostgres()
+            if (_activeBaby.value.id == babyId) {
+                val first = _babies.value.firstOrNull()
+                if (first != null) {
+                    _activeBaby.value = first
+                    saveSettings()
                 }
             }
             withContext(Dispatchers.Main) { onComplete() }
@@ -373,106 +438,59 @@ object DataManager {
         _babies.value = _babies.value.map {
             if (it.id == info.id) info else it
         }.toMutableList()
-
-        if (isCloudInitialized) {
-            appScope.launch {
-                PostgresManager.upsertBaby(
-                    id = info.id, name = info.name, nickname = info.nickname,
-                    birthDate = info.birthDate, gender = info.gender,
-                    avatarUrl = info.avatar, isActive = true,
-                    createdAt = System.currentTimeMillis()
-                )
-            }
-        }
+        saveBabies()
     }
 
     // --- Timeline CRUD ---
     fun addRecord(record: TimelineRecord) {
         val r = if (record.babyId.isEmpty()) record.copy(babyId = _activeBaby.value.id) else record
         _timeline.value = (_timeline.value + r).toMutableList()
-
-        if (isCloudInitialized) {
-            val gson = Gson()
-            appScope.launch {
-                PostgresManager.upsertTimeline(
-                    id = r.id, babyId = r.babyId, date = r.date,
-                    title = r.title, description = r.description, category = r.category,
-                    tags = gson.toJson(r.tags), photos = gson.toJson(r.photos), videos = gson.toJson(r.videos)
-                )
-            }
-        }
+        saveTimeline()
     }
 
     fun updateRecord(id: String, updates: (TimelineRecord) -> TimelineRecord) {
         _timeline.value = _timeline.value.map { if (it.id == id) updates(it) else it }.toMutableList()
-        saveTimelineAsync()
+        saveTimeline()
     }
 
     fun deleteRecord(id: String) {
         _timeline.value = _timeline.value.filter { it.id != id }.toMutableList()
         _photos.value = _photos.value.filter { it.timelineRecordId != id }.toMutableList()
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deleteTimelineById(id)
-                PostgresManager.deletePhotosByRecordId(id)
-            }
-        }
-    }
-
-    private fun saveTimelineAsync() {
-        val records = _timeline.value
-        val gson = Gson()
-        appScope.launch {
-            if (isCloudInitialized) {
-                records.forEach { record ->
-                    PostgresManager.upsertTimeline(
-                        id = record.id, babyId = record.babyId, date = record.date,
-                        title = record.title, description = record.description,
-                        category = record.category,
-                        tags = gson.toJson(record.tags),
-                        photos = gson.toJson(record.photos),
-                        videos = gson.toJson(record.videos)
-                    )
-                }
-            }
-        }
+        saveTimeline()
+        savePhotos()
     }
 
     // --- Photos CRUD ---
     fun addPhoto(photo: PhotoEntry) {
         val p = if (photo.babyId.isEmpty()) photo.copy(babyId = _activeBaby.value.id) else photo
         _photos.value = (listOf(p) + _photos.value).toMutableList()
+        savePhotos()
 
-        if (isCloudInitialized) {
-            val gson = Gson()
-            appScope.launch {
-                PostgresManager.upsertPhoto(
-                    id = p.id, babyId = p.babyId, url = p.url,
-                    caption = p.caption, date = p.date,
-                    timelineRecordId = p.timelineRecordId,
-                    tags = gson.toJson(p.tags),
-                    mediaType = if (p.tags.contains("视频")) "video" else "image"
-                )
-                // Trigger cloud upload for local file paths
-                val config = _cloudStorageConfig.value
-                val localFile = File(p.url)
-                if (localFile.exists()) {
-                    val remoteName = "photos/${p.id}.jpg"
-                    val result = CloudManager.uploadFile(p.url, remoteName, config)
-                    if (result.success) {
-                        val remoteUrl = CloudManager.getPublicUrl(result.remotePath, config)
-                        // Update photo url in PostgreSQL
+        // Upload media file to WebDAV if it's a local file
+        appScope.launch {
+            val localFile = File(p.url)
+            if (localFile.exists()) {
+                try {
+                    val config = getWebDavConfig()
+                    val ext = p.url.substringAfterLast(".", "jpg")
+                    val remoteName = "photos/${p.id}.$ext"
+                    val mimeType = when (ext.lowercase()) {
+                        "mp4" -> "video/mp4"
+                        "webm" -> "video/webm"
+                        "png" -> "image/png"
+                        else -> "image/jpeg"
+                    }
+                    val data = localFile.readBytes()
+                    val uploadResult = WebDavManager.uploadFile(config, "$MEDIA_PATH/$remoteName", data, mimeType)
+                    if (uploadResult.isSuccess && uploadResult.getOrThrow()) {
+                        val remoteUrl = "http://${config.url}/$MEDIA_PATH/$remoteName".replace("//", "/").replace("http:/", "http://")
                         _photos.value = _photos.value.map {
                             if (it.id == p.id) it.copy(url = remoteUrl) else it
                         }.toMutableList()
-                        PostgresManager.upsertPhoto(
-                            id = p.id, babyId = p.babyId, url = remoteUrl,
-                            caption = p.caption, date = p.date,
-                            timelineRecordId = p.timelineRecordId,
-                            tags = gson.toJson(p.tags),
-                            mediaType = if (p.tags.contains("视频")) "video" else "image"
-                        )
+                        savePhotos()
                     }
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to upload photo to WebDAV", e)
                 }
             }
         }
@@ -480,42 +498,24 @@ object DataManager {
 
     fun deletePhoto(id: String) {
         _photos.value = _photos.value.filter { it.id != id }.toMutableList()
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deletePhotoById(id)
-            }
-        }
+        savePhotos()
     }
 
     // --- Categories ---
     fun addCategory(cat: CategoryConfig) {
         _customCategories.value = (_customCategories.value + cat).toMutableList()
-        persistCategories()
+        saveSettings()
     }
 
     fun removeCategory(id: String) {
         _customCategories.value = _customCategories.value.filter { it.id != id }.toMutableList()
-        persistCategories()
-    }
-
-    private fun persistCategories() {
-        appScope.launch {
-            val json = Gson().toJson(_customCategories.value)
-            if (isCloudInitialized) {
-                PostgresManager.upsertSetting("custom_categories", json)
-            }
-        }
+        saveSettings()
     }
 
     // --- AI Config ---
     fun updateAIConfig(config: AIConfig) {
         _aiConfig.value = config
-        appScope.launch {
-            val json = Gson().toJson(config)
-            if (isCloudInitialized) {
-                PostgresManager.upsertSetting("ai_config", json)
-            }
-        }
+        saveSettings()
     }
 
     val isAIConfigured: Boolean get() {
@@ -524,32 +524,16 @@ object DataManager {
     }
 
     // --- AI Profile Management ---
-    private fun persistAIProfiles() {
-        appScope.launch {
-            if (isCloudInitialized) {
-                _aiProfiles.value.forEach { profile ->
-                    PostgresManager.upsertAIProfile(
-                        id = profile.id, name = profile.name,
-                        apiBaseUrl = profile.apiBaseUrl, apiKey = profile.apiKey,
-                        model = profile.model, systemPrompt = profile.systemPrompt,
-                        temperature = profile.temperature, maxTokens = profile.maxTokens,
-                        isActive = profile.isActive
-                    )
-                }
-            }
-        }
-    }
-
     fun addAIProfile(profile: AIProfile) {
         _aiProfiles.value = (_aiProfiles.value + profile).toMutableList()
-        persistAIProfiles()
+        saveAiProfiles()
     }
 
     fun updateAIProfile(profile: AIProfile) {
         _aiProfiles.value = _aiProfiles.value.map {
             if (it.id == profile.id) profile else it
         }.toMutableList()
-        persistAIProfiles()
+        saveAiProfiles()
     }
 
     fun deleteAIProfile(profileId: String) {
@@ -560,18 +544,14 @@ object DataManager {
                 if (it.id == first.id) it.copy(isActive = true) else it
             }.toMutableList()
         }
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deleteAIProfile(profileId)
-            }
-        }
+        saveAiProfiles()
     }
 
     fun setActiveAIProfile(profileId: String) {
         _aiProfiles.value = _aiProfiles.value.map {
             it.copy(isActive = it.id == profileId)
         }.toMutableList()
-        persistAIProfiles()
+        saveAiProfiles()
     }
 
     fun testAIProfileConnection(profile: AIProfile, onResult: (Result<Boolean>) -> Unit) {
@@ -609,31 +589,18 @@ object DataManager {
     // --- Theme ---
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.upsertSetting("theme_mode", mode.name)
-            }
-        }
+        saveSettings()
     }
 
     // --- WebDAV ---
     fun saveWebDavConfig(config: WebDavManager.WebDavConfig) {
         _webDavConfig.value = config
-        appScope.launch {
-            val json = Gson().toJson(config)
-            if (isCloudInitialized) {
-                PostgresManager.upsertSetting("webdav_config", json)
-            }
-        }
+        saveSettings()
     }
 
     fun clearWebDavConfig() {
         _webDavConfig.value = null
-        appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deleteSetting("webdav_config")
-            }
-        }
+        saveSettings()
     }
 
     fun testWebDavConnection(config: WebDavManager.WebDavConfig, onResult: (Result<WebDavManager.ConnectionTestResult>) -> Unit) {
@@ -644,11 +611,7 @@ object DataManager {
     }
 
     fun uploadBackup(onProgress: (String) -> Unit, onComplete: (Result<Boolean>) -> Unit) {
-        val config = _webDavConfig.value
-        if (config == null) {
-            onComplete(Result.failure(Exception("请先配置 WebDAV")))
-            return
-        }
+        val config = _webDavConfig.value ?: getWebDavConfig()
         _isBackingUp.value = true
         appScope.launch {
             try {
@@ -712,7 +675,7 @@ object DataManager {
                     "tags" to it.tags
                 )
             },
-            "settings" to mapOf<String, String>()
+            "settings" to buildSettingsMap()
         )
         return gson.toJson(export)
     }
@@ -745,11 +708,7 @@ object DataManager {
     }
 
     fun downloadBackup(filename: String, onProgress: (String) -> Unit, onComplete: (Result<ByteArray>) -> Unit) {
-        val config = _webDavConfig.value
-        if (config == null) {
-            onComplete(Result.failure(Exception("请先配置 WebDAV")))
-            return
-        }
+        val config = _webDavConfig.value ?: getWebDavConfig()
         appScope.launch {
             onProgress("正在从 WebDAV 下载备份...")
             val result = WebDavManager.downloadBackup(config, filename)
@@ -758,11 +717,7 @@ object DataManager {
     }
 
     fun refreshBackupList(onResult: (Result<List<String>>) -> Unit) {
-        val config = _webDavConfig.value
-        if (config == null) {
-            onResult(Result.failure(Exception("请先配置 WebDAV")))
-            return
-        }
+        val config = _webDavConfig.value ?: getWebDavConfig()
         appScope.launch {
             val result = WebDavManager.listBackups(config)
             result.onSuccess { _backupFiles.value = it }
@@ -798,18 +753,11 @@ object DataManager {
                                 avatar = m["avatarUri"] as? String
                             )
                             newBabies.add(baby)
-                            if (isCloudInitialized) {
-                                PostgresManager.upsertBaby(
-                                    id = bid, name = baby.name, nickname = baby.nickname,
-                                    birthDate = baby.birthDate, gender = baby.gender,
-                                    avatarUrl = baby.avatar, isActive = (bid == activeBabyId),
-                                    createdAt = System.currentTimeMillis()
-                                )
-                            }
                         }
                         _babies.value = newBabies
                         val active = newBabies.find { it.id == activeBabyId } ?: newBabies.firstOrNull()
                         if (active != null) _activeBaby.value = active
+                        saveBabies()
                     }
 
                     // Import timeline
@@ -818,7 +766,7 @@ object DataManager {
                         val newTimeline = mutableListOf<TimelineRecord>()
                         timelineList.mapNotNull { item ->
                             val m = item as? Map<*, *> ?: return@mapNotNull null
-                            val record = TimelineRecord(
+                            TimelineRecord(
                                 id = m["id"] as? String ?: "",
                                 babyId = m["babyId"] as? String ?: "",
                                 date = m["date"] as? String ?: "",
@@ -829,19 +777,9 @@ object DataManager {
                                 photos = (m["photos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
                                 videos = (m["videos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                             )
-                            newTimeline.add(record)
-                            if (isCloudInitialized) {
-                                PostgresManager.upsertTimeline(
-                                    id = record.id, babyId = record.babyId, date = record.date,
-                                    title = record.title, description = record.description,
-                                    category = record.category,
-                                    tags = gson.toJson(record.tags),
-                                    photos = gson.toJson(record.photos),
-                                    videos = gson.toJson(record.videos)
-                                )
-                            }
-                        }
+                        }.forEach { newTimeline.add(it) }
                         _timeline.value = newTimeline
+                        saveTimeline()
                     }
 
                     // Import photos
@@ -850,7 +788,7 @@ object DataManager {
                         val newPhotos = mutableListOf<PhotoEntry>()
                         photosList.mapNotNull { item ->
                             val m = item as? Map<*, *> ?: return@mapNotNull null
-                            val photo = PhotoEntry(
+                            PhotoEntry(
                                 id = m["id"] as? String ?: "",
                                 babyId = m["babyId"] as? String ?: "",
                                 url = m["url"] as? String ?: "",
@@ -859,18 +797,9 @@ object DataManager {
                                 timelineRecordId = m["timelineRecordId"] as? String,
                                 tags = (m["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                             )
-                            newPhotos.add(photo)
-                            if (isCloudInitialized) {
-                                PostgresManager.upsertPhoto(
-                                    id = photo.id, babyId = photo.babyId, url = photo.url,
-                                    caption = photo.caption, date = photo.date,
-                                    timelineRecordId = photo.timelineRecordId,
-                                    tags = gson.toJson(photo.tags),
-                                    mediaType = "image"
-                                )
-                            }
-                        }
+                        }.forEach { newPhotos.add(it) }
                         _photos.value = newPhotos
+                        savePhotos()
                     }
 
                     withContext(Dispatchers.Main) { onComplete(true) }
@@ -913,7 +842,6 @@ object DataManager {
                     withContext(Dispatchers.Main) { onResult(false) }
                     return@launch
                 }
-                // Simple import - just load into StateFlows
                 val babiesList = map["baby"] as? List<*>
                 if (babiesList != null) {
                     val newBabies = babiesList.mapNotNull { item ->
@@ -929,6 +857,7 @@ object DataManager {
                     }
                     _babies.value = newBabies
                     newBabies.firstOrNull()?.let { _activeBaby.value = it }
+                    saveBabies()
                 }
                 withContext(Dispatchers.Main) { onResult(true) }
             } catch (e: Exception) {
@@ -939,9 +868,6 @@ object DataManager {
 
     fun resetAllData(onComplete: () -> Unit) {
         appScope.launch {
-            if (isCloudInitialized) {
-                PostgresManager.deleteAllSettings()
-            }
             _timeline.value = emptyList()
             _photos.value = emptyList()
             _babies.value = emptyList()
@@ -953,6 +879,12 @@ object DataManager {
             _themeMode.value = ThemeMode.SYSTEM
             _webDavConfig.value = null
             _cloudStorageConfig.value = CloudStorageConfig()
+            // Also overwrite all JSON files with empty data
+            saveBabies()
+            saveTimeline()
+            savePhotos()
+            saveSettings()
+            saveAiProfiles()
             withContext(Dispatchers.Main) { onComplete() }
         }
     }

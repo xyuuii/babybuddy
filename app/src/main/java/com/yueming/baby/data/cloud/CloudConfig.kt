@@ -14,11 +14,3 @@ data class CloudStorageConfig(
     val ftpPath: String = "/sata1-15529232180/yueming/"
 )
 
-data class PostgresConfig(
-    val host: String = "192.168.0.28",
-    val port: Int = 15432,
-    val database: String = "maindb",
-    val username: String = "dbadmin",
-    val password: String = "Db@Admin#2026!Pg",
-    val schema: String = "yueming"
-)
