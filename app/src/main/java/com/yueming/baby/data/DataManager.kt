@@ -740,8 +740,10 @@ object DataManager {
 
     // --- Age calculations ---
     fun getAgeInMonths(birthDate: String): Int {
+        if (birthDate.isBlank()) return 0
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-        val birth = fmt.parse(birthDate) ?: return 0
+        val birth = try { fmt.parse(birthDate) } catch (e: Exception) { return 0 }
+        birth ?: return 0
         val birthCal = java.util.Calendar.getInstance().apply { time = birth }
         val nowCal = java.util.Calendar.getInstance()
         var months = (nowCal.get(java.util.Calendar.YEAR) - birthCal.get(java.util.Calendar.YEAR)) * 12
@@ -751,8 +753,10 @@ object DataManager {
     }
 
     fun getAgeInDays(birthDate: String): Int {
+        if (birthDate.isBlank()) return 0
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-        val birth = fmt.parse(birthDate) ?: return 0
+        val birth = try { fmt.parse(birthDate) } catch (e: Exception) { return 0 }
+        birth ?: return 0
         val now = java.util.Date()
         val diff = now.time - birth.time
         return (diff / (1000 * 60 * 60 * 24)).toInt()
