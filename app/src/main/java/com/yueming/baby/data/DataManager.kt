@@ -115,25 +115,12 @@ object DataManager {
     fun init(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        android.util.Log.d("DataManager", "Initializing with cloud backend...")
-        appScope.launch {
-            try {
-                // Initialize PostgreSQL connection
-                val pgResult = PostgresManager.initialize()
-                if (pgResult.isSuccess) {
-                    isCloudInitialized = true
-                    android.util.Log.d("DataManager", "PostgreSQL connected")
-                    loadFromPostgres()
-                } else {
-                    android.util.Log.w("DataManager", "PostgreSQL init failed, using local-only mode")
-                    // Fall back to empty data for now (no Room available)
-                    _babies.value = emptyList()
-                    _activeBaby.value = BabyInfo()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("DataManager", "Init failed", e)
-            }
-        }
+        android.util.Log.d("DataManager", "Starting in offline mode")
+        // Default to offline mode. PostgreSQL connection is deferred until
+        // user configures and tests connection from Settings.
+        _babies.value = emptyList()
+        _activeBaby.value = BabyInfo()
+        _themeMode.value = ThemeMode.SYSTEM
     }
 
     private suspend fun loadFromPostgres() {

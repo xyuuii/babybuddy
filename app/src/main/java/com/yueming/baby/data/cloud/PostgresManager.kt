@@ -20,12 +20,14 @@ object PostgresManager {
     suspend fun initialize(cfg: PostgresConfig = PostgresConfig()): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             config = cfg
-            Class.forName("org.postgresql.Driver")
+            // Don't call Class.forName - it can crash on Android.
+            // DriverManager auto-discovers via service loader or we try direct connection.
             val props = Properties().apply {
                 setProperty("user", config.username)
                 setProperty("password", config.password)
                 setProperty("connectTimeout", "5")
                 setProperty("socketTimeout", "10")
+                setProperty("loginTimeout", "5")
             }
             val conn = DriverManager.getConnection(getJdbcUrl(), props)
             connection = conn
