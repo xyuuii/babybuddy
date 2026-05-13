@@ -6,14 +6,27 @@ import com.google.gson.reflect.TypeToken
 import com.yueming.baby.data.entity.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 object DataManager {
     private var db: AppDatabase? = null
+    private var appContext: Context? = null
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // --- StateFlows (keep same API for UI) ---
-    private val _babyInfo = MutableStateFlow(sampleBaby)
-    val babyInfo: StateFlow<BabyInfo> = _babyInfo.asStateFlow()
+    // --- StateFlows ---
+    private val _babies = MutableStateFlow<List<BabyInfo>>(emptyList())
+    val babies: StateFlow<List<BabyInfo>> = _babies.asStateFlow()
+
+    private val _activeBaby = MutableStateFlow(sampleBaby)
+    val activeBaby: StateFlow<BabyInfo> = _activeBaby.asStateFlow()
+
+    val activeBabyId: String get() = _activeBaby.value.id
+
+    // Legacy alias for backward compatibility
+    val babyInfo: StateFlow<BabyInfo> = _activeBaby.asStateFlow()
 
     private val _timeline = MutableStateFlow(sampleTimeline.toMutableList())
     val timeline: StateFlow<List<TimelineRecord>> = _timeline.asStateFlow()
@@ -36,9 +49,20 @@ object DataManager {
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    // WebDAV state
+    private val _webDavConfig = MutableStateFlow<WebDavManager.WebDavConfig?>(null)
+    val webDavConfig: StateFlow<WebDavManager.WebDavConfig?> = _webDavConfig.asStateFlow()
+
+    private val _backupFiles = MutableStateFlow<List<String>>(emptyList())
+    val backupFiles: StateFlow<List<String>> = _backupFiles.asStateFlow()
+
+    private val _isBackingUp = MutableStateFlow(false)
+    val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
+
     // --- Initialization ---
     fun init(context: Context) {
         if (db != null) return
+        appContext = context.applicationContext
         db = AppDatabase.getInstance(context.applicationContext)
         appScope.launch {
             loadFromRoom()
@@ -49,20 +73,49 @@ object DataManager {
         val database = db ?: return
         val gson = Gson()
 
-        // Load baby
-        database.babyDao().getBaby()?.let {
-            _babyInfo.value = BabyInfo(
-                name = it.name, nickname = it.nickname,
-                birthDate = it.birthDate, gender = it.gender,
-                avatar = it.avatar
+        // Load all babies
+        val babyEntities = database.babyDao().getAllBabies()
+        if (babyEntities.isNotEmpty()) {
+            _babies.value = babyEntities.map {
+                BabyInfo(
+                    id = it.id, name = it.name, nickname = it.nickname,
+                    birthDate = it.birthDate, gender = it.gender,
+                    avatar = it.avatarUri
+                )
+            }
+            val activeEntity = babyEntities.firstOrNull { it.isActive } ?: babyEntities.first()
+            _activeBaby.value = BabyInfo(
+                id = activeEntity.id, name = activeEntity.name,
+                nickname = activeEntity.nickname, birthDate = activeEntity.birthDate,
+                gender = activeEntity.gender, avatar = activeEntity.avatarUri
             )
+        } else {
+            _babies.value = listOf(sampleBaby)
+            _activeBaby.value = sampleBaby
+        }
+
+        // Load data for active baby
+        loadBabyData()
+        loadGlobalSettings()
+    }
+
+    private suspend fun loadBabyData() {
+        val database = db ?: return
+        val babyId = _activeBaby.value.id
+        val gson = Gson()
+
+        if (babyId.isEmpty()) {
+            _timeline.value = emptyList<TimelineRecord>().toMutableList()
+            _photos.value = emptyList<PhotoEntry>().toMutableList()
+            return
         }
 
         // Load timeline
-        val records = database.timelineDao().getAllOnce().map { entity ->
+        val records = database.timelineDao().getAllByBaby(babyId).map { entity ->
             TimelineRecord(
-                id = entity.id, date = entity.date, title = entity.title,
-                description = entity.description, category = entity.category,
+                id = entity.id, babyId = entity.babyId, date = entity.date,
+                title = entity.title, description = entity.description,
+                category = entity.category,
                 tags = parseJsonList(gson, entity.tags),
                 photos = parseJsonList(gson, entity.photos),
                 videos = parseJsonList(gson, entity.videos)
@@ -71,14 +124,20 @@ object DataManager {
         _timeline.value = records.toMutableList()
 
         // Load photos
-        val photos = database.photoDao().getAllOnce().map { entity ->
+        val photoList = database.photoDao().getAllByBaby(babyId).map { entity ->
             PhotoEntry(
-                id = entity.id, url = entity.url, caption = entity.caption,
-                date = entity.date, timelineRecordId = entity.timelineRecordId,
+                id = entity.id, babyId = entity.babyId, url = entity.url,
+                caption = entity.caption, date = entity.date,
+                timelineRecordId = entity.timelineRecordId,
                 tags = parseJsonList(gson, entity.tags)
             )
         }
-        _photos.value = photos.toMutableList()
+        _photos.value = photoList.toMutableList()
+    }
+
+    private suspend fun loadGlobalSettings() {
+        val database = db ?: return
+        val gson = Gson()
 
         // Load custom categories
         val catJson = database.settingsDao().get("custom_categories")?.value
@@ -102,6 +161,14 @@ object DataManager {
         database.settingsDao().get("theme_mode")?.value?.let {
             try { _themeMode.value = ThemeMode.valueOf(it) } catch (_: Exception) {}
         }
+
+        // Load WebDAV config
+        val wdJson = database.settingsDao().get("webdav_config")?.value
+        if (wdJson != null) {
+            try {
+                _webDavConfig.value = gson.fromJson(wdJson, WebDavManager.WebDavConfig::class.java)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun parseJsonList(gson: Gson, json: String): List<String> {
@@ -111,63 +178,79 @@ object DataManager {
         } catch (_: Exception) { emptyList() }
     }
 
-    private fun saveTimelineAsync() {
-        val database = db ?: return
-        val records = _timeline.value
-        val gson = Gson()
+    // --- Baby Management ---
+    fun addBaby(info: BabyInfo) {
+        val entity = BabyEntity(
+            id = if (info.id.isEmpty()) java.util.UUID.randomUUID().toString() else info.id,
+            name = info.name, nickname = info.nickname,
+            birthDate = info.birthDate, gender = info.gender,
+            avatarUri = info.avatar
+        )
+        _babies.value = (_babies.value + BabyInfo(
+            id = entity.id, name = entity.name, nickname = entity.nickname,
+            birthDate = entity.birthDate, gender = entity.gender,
+            avatar = entity.avatarUri
+        )).toMutableList()
+        db?.let { database ->
+            appScope.launch { database.babyDao().upsert(entity) }
+        }
+    }
+
+    fun switchBaby(babyId: String) {
+        val babies = _babies.value
+        val target = babies.find { it.id == babyId } ?: return
+        _activeBaby.value = target
         appScope.launch {
-            // Delete all and re-insert (simplest for keeping in sync)
-            val entities = records.map { record ->
-                TimelineEntity(
-                    id = record.id, date = record.date, title = record.title,
-                    description = record.description, category = record.category,
-                    tags = gson.toJson(record.tags),
-                    photos = gson.toJson(record.photos),
-                    videos = gson.toJson(record.videos)
-                )
+            db?.let { database ->
+                database.babyDao().deactivateAll()
+                database.babyDao().setActive(babyId)
             }
-            database.timelineDao().run {
-                // Check count; if mismatch, rebuild
-                val all = getAllOnce()
-                if (all.size != entities.size) {
-                    all.forEach { deleteById(it.id) }
-                    entities.forEach { insert(it) }
-                } else {
-                    entities.forEach { insert(it) }
+            loadBabyData()
+        }
+    }
+
+    fun deleteBaby(babyId: String, onComplete: () -> Unit) {
+        if (_babies.value.size <= 1) {
+            onComplete()
+            return
+        }
+        _babies.value = _babies.value.filter { it.id != babyId }.toMutableList()
+        db?.let { database ->
+            appScope.launch {
+                database.babyDao().deleteById(babyId)
+                database.timelineDao().deleteByBabyId(babyId)
+                database.photoDao().deleteByBabyId(babyId)
+                // Switch to first remaining baby
+                val remaining = database.babyDao().getAllBabies()
+                if (remaining.isNotEmpty()) {
+                    val first = remaining.first()
+                    database.babyDao().setActive(first.id)
+                    withContext(Dispatchers.Main) {
+                        _activeBaby.value = BabyInfo(
+                            id = first.id, name = first.name, nickname = first.nickname,
+                            birthDate = first.birthDate, gender = first.gender, avatar = first.avatarUri
+                        )
+                    }
+                    loadBabyData()
                 }
+                withContext(Dispatchers.Main) { onComplete() }
             }
-        }
+        } ?: onComplete()
     }
 
-    private fun savePhotosAsync() {
-        val database = db ?: return
-        val photos = _photos.value
-        val gson = Gson()
-        appScope.launch {
-            val entities = photos.map { photo ->
-                PhotoEntity(
-                    id = photo.id, url = photo.url, caption = photo.caption,
-                    date = photo.date, timelineRecordId = photo.timelineRecordId,
-                    tags = gson.toJson(photo.tags)
-                )
-            }
-            database.photoDao().run {
-                val all = getAllOnce()
-                all.forEach { deleteById(it.id) }
-                entities.forEach { insert(it) }
-            }
-        }
-    }
-
-    // --- Baby Info ---
     fun updateBabyInfo(info: BabyInfo) {
-        _babyInfo.value = info
+        _activeBaby.value = info
+        // Update in babies list
+        _babies.value = _babies.value.map {
+            if (it.id == info.id) info else it
+        }.toMutableList()
+
         db?.let { database ->
             appScope.launch {
                 database.babyDao().upsert(BabyEntity(
-                    name = info.name, nickname = info.nickname,
+                    id = info.id, name = info.name, nickname = info.nickname,
                     birthDate = info.birthDate, gender = info.gender,
-                    avatar = info.avatar
+                    avatarUri = info.avatar
                 ))
             }
         }
@@ -175,16 +258,18 @@ object DataManager {
 
     // --- Timeline CRUD ---
     fun addRecord(record: TimelineRecord) {
-        _timeline.value = (_timeline.value + record).toMutableList()
+        val r = if (record.babyId.isEmpty()) record.copy(babyId = _activeBaby.value.id) else record
+        _timeline.value = (_timeline.value + r).toMutableList()
         db?.let { database ->
             val gson = Gson()
             appScope.launch {
                 database.timelineDao().insert(TimelineEntity(
-                    id = record.id, date = record.date, title = record.title,
-                    description = record.description, category = record.category,
-                    tags = gson.toJson(record.tags),
-                    photos = gson.toJson(record.photos),
-                    videos = gson.toJson(record.videos)
+                    id = r.id, babyId = r.babyId, date = r.date,
+                    title = r.title, description = r.description,
+                    category = r.category,
+                    tags = gson.toJson(r.tags),
+                    photos = gson.toJson(r.photos),
+                    videos = gson.toJson(r.videos)
                 ))
             }
         }
@@ -206,16 +291,43 @@ object DataManager {
         }
     }
 
+    private fun saveTimelineAsync() {
+        val database = db ?: return
+        val records = _timeline.value
+        val gson = Gson()
+        appScope.launch {
+            val entities = records.map { record ->
+                TimelineEntity(
+                    id = record.id, babyId = record.babyId, date = record.date,
+                    title = record.title, description = record.description,
+                    category = record.category,
+                    tags = gson.toJson(record.tags),
+                    photos = gson.toJson(record.photos),
+                    videos = gson.toJson(record.videos)
+                )
+            }
+            val all = database.timelineDao().getAllOnce()
+            if (all.size != entities.size) {
+                all.forEach { database.timelineDao().deleteById(it.id) }
+                entities.forEach { database.timelineDao().insert(it) }
+            } else {
+                entities.forEach { database.timelineDao().insert(it) }
+            }
+        }
+    }
+
     // --- Photos CRUD ---
     fun addPhoto(photo: PhotoEntry) {
-        _photos.value = (listOf(photo) + _photos.value).toMutableList()
+        val p = if (photo.babyId.isEmpty()) photo.copy(babyId = _activeBaby.value.id) else photo
+        _photos.value = (listOf(p) + _photos.value).toMutableList()
         db?.let { database ->
             val gson = Gson()
             appScope.launch {
                 database.photoDao().insert(PhotoEntity(
-                    id = photo.id, url = photo.url, caption = photo.caption,
-                    date = photo.date, timelineRecordId = photo.timelineRecordId,
-                    tags = gson.toJson(photo.tags)
+                    id = p.id, babyId = p.babyId, url = p.url,
+                    caption = p.caption, date = p.date,
+                    timelineRecordId = p.timelineRecordId,
+                    tags = gson.toJson(p.tags)
                 ))
             }
         }
@@ -276,11 +388,170 @@ object DataManager {
         }
     }
 
-    // --- Export / Import ---
+    // --- WebDAV ---
+    fun saveWebDavConfig(config: WebDavManager.WebDavConfig) {
+        _webDavConfig.value = config
+        db?.let { database ->
+            val json = Gson().toJson(config)
+            appScope.launch {
+                database.settingsDao().upsert(SettingsEntity("webdav_config", json))
+            }
+        }
+    }
+
+    fun clearWebDavConfig() {
+        _webDavConfig.value = null
+        db?.let { database ->
+            appScope.launch {
+                database.settingsDao().delete("webdav_config")
+            }
+        }
+    }
+
+    fun testWebDavConnection(config: WebDavManager.WebDavConfig, onResult: (Result<Boolean>) -> Unit) {
+        appScope.launch {
+            val result = WebDavManager.testConnection(config)
+            withContext(Dispatchers.Main) { onResult(result) }
+        }
+    }
+
+    fun uploadBackup(onProgress: (String) -> Unit, onComplete: (Result<Boolean>) -> Unit) {
+        val config = _webDavConfig.value
+        if (config == null) {
+            onComplete(Result.failure(Exception("请先配置 WebDAV")))
+            return
+        }
+        _isBackingUp.value = true
+        appScope.launch {
+            try {
+                onProgress("正在导出数据...")
+                val db = db ?: throw Exception("数据库未初始化")
+                val json = db.exportToJson(activeBabyId)
+                val jsonBytes = json.toByteArray(Charsets.UTF_8)
+
+                onProgress("正在打包...")
+                val zipBytes = createBackupZip(jsonBytes, activeBabyId)
+
+                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss", java.util.Locale.getDefault())
+                    .format(java.util.Date())
+                val filename = "yueming-backup-${timestamp}.zip"
+
+                onProgress("正在上传到 WebDAV...")
+                val result = WebDavManager.uploadBackup(config, zipBytes, filename)
+
+                withContext(Dispatchers.Main) {
+                    _isBackingUp.value = false
+                    onComplete(result)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isBackingUp.value = false
+                    onComplete(Result.failure(e))
+                }
+            }
+        }
+    }
+
+    private suspend fun createBackupZip(jsonData: ByteArray, babyId: String): ByteArray = withContext(Dispatchers.IO) {
+        val baos = java.io.ByteArrayOutputStream()
+        ZipOutputStream(baos).use { zos ->
+            // Add database.json
+            val jsonEntry = ZipEntry("database.json")
+            zos.putNextEntry(jsonEntry)
+            zos.write(jsonData)
+            zos.closeEntry()
+
+            // Add photos directory
+            val photosEntry = ZipEntry("photos/")
+            zos.putNextEntry(photosEntry)
+            zos.closeEntry()
+
+            // Collect photo URIs and add them as metadata
+            val photoUrls = _photos.value.map { it.url }.filter { it.startsWith("content://") || it.startsWith("file://") }
+            if (photoUrls.isNotEmpty()) {
+                val photoListEntry = ZipEntry("photos/manifest.json")
+                zos.putNextEntry(photoListEntry)
+                zos.write(Gson().toJson(photoUrls).toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+
+            // Add videos directory  
+            val videosEntry = ZipEntry("videos/")
+            zos.putNextEntry(videosEntry)
+            zos.closeEntry()
+        }
+        baos.toByteArray()
+    }
+
+    fun downloadBackup(filename: String, onProgress: (String) -> Unit, onComplete: (Result<ByteArray>) -> Unit) {
+        val config = _webDavConfig.value
+        if (config == null) {
+            onComplete(Result.failure(Exception("请先配置 WebDAV")))
+            return
+        }
+        appScope.launch {
+            onProgress("正在从 WebDAV 下载备份...")
+            val result = WebDavManager.downloadBackup(config, filename)
+            withContext(Dispatchers.Main) { onComplete(result) }
+        }
+    }
+
+    fun refreshBackupList(onResult: (Result<List<String>>) -> Unit) {
+        val config = _webDavConfig.value
+        if (config == null) {
+            onResult(Result.failure(Exception("请先配置 WebDAV")))
+            return
+        }
+        appScope.launch {
+            val result = WebDavManager.listBackups(config)
+            result.onSuccess { _backupFiles.value = it }
+            withContext(Dispatchers.Main) { onResult(result) }
+        }
+    }
+
+    fun restoreFromBackup(bytes: ByteArray, onComplete: (Boolean) -> Unit) {
+        appScope.launch {
+            try {
+                // Extract zip and import
+                val jsonStr = extractJsonFromZip(bytes)
+                if (jsonStr != null) {
+                    db?.let { database ->
+                        val success = database.importFromJson(jsonStr)
+                        if (success) {
+                            loadFromRoom()
+                        }
+                        withContext(Dispatchers.Main) { onComplete(success) }
+                    } ?: withContext(Dispatchers.Main) { onComplete(false) }
+                } else {
+                    withContext(Dispatchers.Main) { onComplete(false) }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onComplete(false) }
+            }
+        }
+    }
+
+    private fun extractJsonFromZip(zipBytes: ByteArray): String? {
+        return try {
+            val zis = java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(zipBytes))
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (entry.name == "database.json") {
+                    return zis.readBytes().toString(Charsets.UTF_8)
+                }
+                entry = zis.nextEntry
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // --- Export / Import (legacy) ---
     fun exportToJson(onResult: (String) -> Unit) {
         db?.let { database ->
             appScope.launch {
-                val json = database.exportToJson()
+                val json = database.exportToJson(activeBabyId)
                 withContext(Dispatchers.Main) { onResult(json) }
             }
         }
@@ -309,11 +580,13 @@ object DataManager {
                 database.settingsDao().deleteAll()
                 _timeline.value = mutableListOf()
                 _photos.value = mutableListOf()
-                _babyInfo.value = sampleBaby
+                _babies.value = listOf(sampleBaby)
+                _activeBaby.value = sampleBaby
                 _customCategories.value = emptyList()
                 _aiConfig.value = AIConfig()
                 _chatMessages.value = emptyList()
                 _themeMode.value = ThemeMode.SYSTEM
+                _webDavConfig.value = null
                 withContext(Dispatchers.Main) { onComplete() }
             }
         } ?: onComplete()

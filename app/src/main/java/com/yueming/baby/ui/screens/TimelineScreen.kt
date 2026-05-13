@@ -3,6 +3,7 @@ package com.yueming.baby.ui.screens
 import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -49,9 +50,7 @@ fun TimelineScreen() {
         else timeline.filter { it.category == activeCategory }
     }
 
-    val sorted = remember(filtered) {
-        filtered.sortedByDescending { it.date }
-    }
+    val sorted = remember(filtered) { filtered.sortedByDescending { it.date } }
 
     val grouped = remember(sorted) {
         val groups = mutableListOf<Pair<String, List<TimelineRecord>>>()
@@ -86,7 +85,7 @@ fun TimelineScreen() {
 
             Spacer(Modifier.height(12.dp))
 
-            // Fix 4: Scrollable filter chips with LazyRow
+            // Scrollable filter chips
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -117,17 +116,19 @@ fun TimelineScreen() {
             if (grouped.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("该分类下暂无记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Text("点击下方按钮添加第一条记录",
-                            style = MaterialTheme.typography.bodySmall,
+                        Icon(Icons.Default.EditNote, null, Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        Spacer(Modifier.height(12.dp))
+                        Text("该分类下暂无记录",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("点击右下角按钮添加第一条记录",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                     }
                 }
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     grouped.forEach { (label, records) ->
                         item {
                             Row(
@@ -144,18 +145,19 @@ fun TimelineScreen() {
                         }
                         items(records) { record ->
                             val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ElevatedCard(
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                                colors = CardDefaults.elevatedCardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 )
                             ) {
-                                Row(Modifier.padding(12.dp)) {
+                                Row(Modifier.padding(14.dp)) {
                                     Box(
                                         Modifier.width(4.dp).fillMaxHeight()
                                             .clip(RoundedCornerShape(2.dp)).background(catColor)
                                     )
-                                    Spacer(Modifier.width(10.dp))
+                                    Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
                                         Row(
                                             Modifier.fillMaxWidth(),
@@ -171,41 +173,37 @@ fun TimelineScreen() {
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         if (record.description.isNotEmpty()) {
-                                            Spacer(Modifier.height(4.dp))
+                                            Spacer(Modifier.height(6.dp))
                                             Text(record.description,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         }
                                         if (record.photos.isNotEmpty()) {
-                                            Spacer(Modifier.height(6.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Spacer(Modifier.height(8.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 record.photos.take(3).forEach { url ->
                                                     Card(
-                                                        modifier = Modifier.size(48.dp),
-                                                        shape = RoundedCornerShape(8.dp)
+                                                        modifier = Modifier.size(52.dp),
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                                                     ) {
-                                                        AsyncImage(
-                                                            model = url,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            contentScale = ContentScale.Crop
-                                                        )
+                                                        AsyncImage(model = url, contentDescription = null,
+                                                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                                     }
                                                 }
                                             }
                                         }
                                         if (record.tags.isNotEmpty()) {
-                                            Spacer(Modifier.height(6.dp))
+                                            Spacer(Modifier.height(8.dp))
                                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 record.tags.take(5).forEach { tag ->
                                                     Box(
-                                                        Modifier.clip(RoundedCornerShape(8.dp))
+                                                        Modifier.clip(RoundedCornerShape(10.dp))
                                                             .background(catColor.copy(alpha = 0.15f))
-                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            .padding(horizontal = 8.dp, vertical = 3.dp)
                                                     ) {
-                                                        Text(tag, fontSize = 10.sp,
-                                                            color = catColor)
+                                                        Text(tag, fontSize = 10.sp, color = catColor)
                                                     }
                                                 }
                                             }
@@ -215,23 +213,32 @@ fun TimelineScreen() {
                             }
                         }
                     }
-                    item { Spacer(Modifier.height(72.dp)) }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }
 
-        // FAB
-        FloatingActionButton(
-            onClick = {
-                editingRecord = null
-                showAddDialog = true
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = Color(0xFFEC407A)
+        // FAB with scroll show/hide animation
+        var fabVisible by remember { mutableStateOf(true) }
+        AnimatedVisibility(
+            visible = fabVisible,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "添加记录", tint = Color.White)
+            ExtendedFloatingActionButton(
+                onClick = {
+                    editingRecord = null
+                    showAddDialog = true
+                },
+                containerColor = Color(0xFFEC407A),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "添加记录")
+                Spacer(Modifier.width(6.dp))
+                Text("添加记录")
+            }
         }
 
         // Add/Edit Dialog
@@ -266,7 +273,6 @@ private fun AddRecordDialog(
     val context = LocalContext.current
     val cal = Calendar.getInstance()
 
-    // Fix 5: Default to current date and time
     var date by remember {
         mutableStateOf(initialData?.date ?: "%04d-%02d-%02d".format(
             cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
@@ -279,8 +285,6 @@ private fun AddRecordDialog(
     var description by remember { mutableStateOf(initialData?.description ?: "") }
     var category by remember { mutableStateOf(initialData?.category ?: "milestone") }
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
-
-    // Fix 5: Photo selection
     var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
 
     val allCategories = DataManager.allCategories
@@ -308,15 +312,13 @@ private fun AddRecordDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initialData != null) "编辑记录" else "添加新记录",
-                fontWeight = FontWeight.Bold)
+            Text(if (initialData != null) "编辑记录" else "添加新记录", fontWeight = FontWeight.Bold)
         },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Fix 5: Date + Time pickers
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -324,13 +326,11 @@ private fun AddRecordDialog(
                     OutlinedButton(
                         onClick = {
                             val d = LocalDate.parse(date)
-                            android.app.DatePickerDialog(
-                                context, { _, y, m, day ->
-                                    date = "%04d-%02d-%02d".format(y, m + 1, day)
-                                }, d.year, d.monthValue - 1, d.dayOfMonth
-                            ).show()
+                            android.app.DatePickerDialog(context, { _, y, m, day ->
+                                date = "%04d-%02d-%02d".format(y, m + 1, day)
+                            }, d.year, d.monthValue - 1, d.dayOfMonth).show()
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -341,13 +341,11 @@ private fun AddRecordDialog(
                             val parts = timeStr.split(":")
                             val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
                             val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                            TimePickerDialog(
-                                context, { _, hour, minute ->
-                                    timeStr = "%02d:%02d".format(hour, minute)
-                                }, h, m, true
-                            ).show()
+                            TimePickerDialog(context, { _, hour, minute ->
+                                timeStr = "%02d:%02d".format(hour, minute)
+                            }, h, m, true).show()
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.Schedule, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -355,27 +353,19 @@ private fun AddRecordDialog(
                     }
                 }
 
-                // Title
                 OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
+                    value = title, onValueChange = { title = it },
                     label = { Text("标题（如：第一次翻身）") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp)
                 )
 
-                // Description
                 OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
+                    value = description, onValueChange = { description = it },
                     label = { Text("记录下这个珍贵时刻...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3
+                    modifier = Modifier.fillMaxWidth(), minLines = 3, shape = RoundedCornerShape(12.dp)
                 )
 
-                // Fix 6: FlowRow for categories
-                Text("分类", style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium)
+                Text("分类", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -394,31 +384,21 @@ private fun AddRecordDialog(
                     }
                 }
 
-                // Fix 5: Photo selection area
-                Text("照片 (${selectedPhotos.size}/4)",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium)
+                Text("照片 (${selectedPhotos.size}/4)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     selectedPhotos.forEach { uri ->
-                        Box(
-                            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp))
-                        ) {
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+                        Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
+                            AsyncImage(model = uri, contentDescription = null,
+                                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                             IconButton(
                                 onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
                                 modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
                                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                             ) {
-                                Icon(Icons.Default.Close, null,
-                                    Modifier.size(12.dp), tint = Color.White)
+                                Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
                             }
                         }
                     }
@@ -426,45 +406,29 @@ private fun AddRecordDialog(
                         OutlinedButton(
                             onClick = { imagePicker.launch("image/*") },
                             modifier = Modifier.size(72.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(0.dp)
+                            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(0.dp)
                         ) {
-                            Icon(Icons.Default.Add, null, Modifier.size(24.dp),
-                                tint = Color(0xFFEC407A))
+                            Icon(Icons.Default.Add, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
                         }
                     }
                 }
 
-                // Tags
                 if (tags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         tags.forEach { tag ->
-                            InputChip(
-                                selected = true,
-                                onClick = { tags = tags.filter { it != tag } },
+                            InputChip(selected = true, onClick = { tags = tags.filter { it != tag } },
                                 label = { Text(tag, fontSize = 11.sp) },
-                                trailingIcon = {
-                                    Icon(Icons.Default.Close, null, Modifier.size(14.dp))
-                                }
-                            )
+                                trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(14.dp)) })
                         }
                     }
                 }
                 if (defaultTags.isNotEmpty()) {
                     val suggested = defaultTags.filter { it !in tags }.take(5)
                     if (suggested.isNotEmpty()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             suggested.forEach { tag ->
-                                AssistChip(
-                                    onClick = { tags = tags + tag },
-                                    label = { Text("+$tag", fontSize = 10.sp) }
-                                )
+                                AssistChip(onClick = { tags = tags + tag },
+                                    label = { Text("+$tag", fontSize = 10.sp) })
                             }
                         }
                     }
@@ -477,23 +441,17 @@ private fun AddRecordDialog(
                     if (title.isNotBlank()) {
                         onSave(TimelineRecord(
                             id = initialData?.id ?: "record-${UUID.randomUUID().toString().take(8)}",
-                            date = date,
-                            title = title.trim(),
-                            description = description.trim(),
-                            category = category,
-                            tags = tags,
-                            photos = selectedPhotos
+                            date = date, title = title.trim(), description = description.trim(),
+                            category = category, tags = tags, photos = selectedPhotos
                         ))
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text(if (initialData != null) "保存修改" else "添加记录",
-                    color = Color.White)
+                Text(if (initialData != null) "保存修改" else "添加记录", color = Color.White)
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }

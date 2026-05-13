@@ -91,20 +91,20 @@ val sampleTimeline = listOf(
 )
 
 val samplePhotos = listOf(
-    PhotoEntry("p1", "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
-        "出生第一天的小月亮", "2025-01-15", timelineRecordId = "1", tags = listOf("新生儿", "出生")),
-    PhotoEntry("p2", "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
-        "甜甜的睡颜", "2025-02-10", tags = listOf("睡觉", "可爱")),
-    PhotoEntry("p3", "https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&h=600&fit=crop",
-        "妈妈抱抱", "2025-03-15", tags = listOf("亲子", "拥抱")),
-    PhotoEntry("p4", "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
-        "三个月的小月亮", "2025-04-15", tags = listOf("成长", "可爱")),
-    PhotoEntry("p5", "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
-        "趴着抬头练习", "2025-05-20", tags = listOf("运动", "抬头")),
-    PhotoEntry("p6", "https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&h=600&fit=crop",
-        "第一次翻身成功！", "2025-07-01", timelineRecordId = "7", tags = listOf("翻身", "里程碑")),
-    PhotoEntry("p7", "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
-        "吃辅食啦", "2025-09-15", timelineRecordId = "6", tags = listOf("辅食", "吃饭")),
-    PhotoEntry("p8", "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
-        "一岁生日派对", "2026-02-14", timelineRecordId = "15", tags = listOf("生日", "一岁"))
+    PhotoEntry(id = "p1", url = "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
+        caption = "出生第一天的小月亮", date = "2025-01-15", timelineRecordId = "1", tags = listOf("新生儿", "出生")),
+    PhotoEntry(id = "p2", url = "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
+        caption = "甜甜的睡颜", date = "2025-02-10", tags = listOf("睡觉", "可爱")),
+    PhotoEntry(id = "p3", url = "https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&h=600&fit=crop",
+        caption = "妈妈抱抱", date = "2025-03-15", tags = listOf("亲子", "拥抱")),
+    PhotoEntry(id = "p4", url = "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
+        caption = "三个月的小月亮", date = "2025-04-15", tags = listOf("成长", "可爱")),
+    PhotoEntry(id = "p5", url = "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
+        caption = "趴着抬头练习", date = "2025-05-20", tags = listOf("运动", "抬头")),
+    PhotoEntry(id = "p6", url = "https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&h=600&fit=crop",
+        caption = "第一次翻身成功！", date = "2025-07-01", timelineRecordId = "7", tags = listOf("翻身", "里程碑")),
+    PhotoEntry(id = "p7", url = "https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=600&h=600&fit=crop",
+        caption = "吃辅食啦", date = "2025-09-15", timelineRecordId = "6", tags = listOf("辅食", "吃饭")),
+    PhotoEntry(id = "p8", url = "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=600&fit=crop",
+        caption = "一岁生日派对", date = "2026-02-14", timelineRecordId = "15", tags = listOf("生日", "一岁"))
 )

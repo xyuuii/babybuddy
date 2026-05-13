@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
 
 data class BabyInfo(
+    val id: String = "",
     val name: String = "小月亮",
     val nickname: String = "月月",
     val birthDate: String = "2025-01-15",
@@ -14,6 +15,7 @@ data class BabyInfo(
 
 data class TimelineRecord(
     val id: String,
+    val babyId: String = "",
     val date: String,
     val title: String,
     val description: String,
@@ -25,6 +27,7 @@ data class TimelineRecord(
 
 data class PhotoEntry(
     val id: String,
+    val babyId: String = "",
     val url: String,
     val caption: String,
     val date: String,

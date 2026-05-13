@@ -44,15 +44,13 @@ fun PhotosScreen() {
     var showUrlInput by remember { mutableStateOf(false) }
     var lightboxPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
 
-    // Image picker
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            val uriStr = uri.toString()
             DataManager.addPhoto(PhotoEntry(
                 id = "photo-${UUID.randomUUID().toString().take(8)}",
-                url = uriStr,
+                url = uri.toString(),
                 caption = photoCaption.ifBlank { "照片" },
                 date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
                 tags = emptyList()
@@ -62,7 +60,6 @@ fun PhotosScreen() {
         }
     }
 
-    // Group photos by month
     val groupedPhotos = remember(photos) {
         val sorted = photos.sortedByDescending { it.date }
         val groups = linkedMapOf<String, List<PhotoEntry>>()
@@ -83,7 +80,6 @@ fun PhotosScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Header
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -98,45 +94,39 @@ fun PhotosScreen() {
             if (!showUpload) {
                 Button(
                     onClick = { showUpload = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("上传照片", color = Color.White)
                 }
             }
         }
 
-        // Upload section
         if (showUpload) {
             Spacer(Modifier.height(12.dp))
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
                         Text("添加照片", fontWeight = FontWeight.Medium)
                         IconButton(onClick = { showUpload = false }) {
                             Icon(Icons.Default.Close, null)
                         }
                     }
                     OutlinedTextField(
-                        value = photoCaption,
-                        onValueChange = { photoCaption = it },
+                        value = photoCaption, onValueChange = { photoCaption = it },
                         label = { Text("照片描述（可选）") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { photoPicker.launch("image/*") },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.PhotoLibrary, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
@@ -144,23 +134,18 @@ fun PhotosScreen() {
                         }
                         OutlinedButton(
                             onClick = { showUrlInput = !showUrlInput },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(if (showUrlInput) "收起" else "图片链接", fontSize = 12.sp)
                         }
                     }
                     if (showUrlInput) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
-                                value = photoUrl,
-                                onValueChange = { photoUrl = it },
-                                label = { Text("图片URL") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
+                                value = photoUrl, onValueChange = { photoUrl = it },
+                                label = { Text("图片URL") }, modifier = Modifier.weight(1f),
+                                singleLine = true, shape = RoundedCornerShape(12.dp)
                             )
                             Button(
                                 onClick = {
@@ -168,21 +153,16 @@ fun PhotosScreen() {
                                     if (url.isNotEmpty()) {
                                         DataManager.addPhoto(PhotoEntry(
                                             id = "photo-${UUID.randomUUID().toString().take(8)}",
-                                            url = url,
-                                            caption = photoCaption.ifBlank { "照片" },
+                                            url = url, caption = photoCaption.ifBlank { "照片" },
                                             date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
                                             tags = emptyList()
                                         ))
-                                        photoUrl = ""
-                                        photoCaption = ""
-                                        showUrlInput = false
-                                        showUpload = false
+                                        photoUrl = ""; photoCaption = ""; showUrlInput = false; showUpload = false
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
-                            ) {
-                                Text("添加", color = Color.White)
-                            }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("添加", color = Color.White) }
                         }
                     }
                 }
@@ -194,20 +174,20 @@ fun PhotosScreen() {
         if (photos.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.PhotoLibrary, null, Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                    Spacer(Modifier.height(8.dp))
-                    Text("还没有照片", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.PhotoLibrary, null, Modifier.size(56.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                    Spacer(Modifier.height(12.dp))
+                    Text("还没有照片",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
                     Text("上传宝宝的第一张照片吧",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                 }
             }
         } else {
-            // Month-grouped photos with sticky headers (Fix 2)
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 groupedPhotos.forEach { (monthLabel, monthPhotos) ->
                     stickyHeader {
                         Surface(
@@ -215,48 +195,37 @@ fun PhotosScreen() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    monthLabel,
-                                    style = MaterialTheme.typography.titleSmall,
+                                Text(monthLabel, style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    "  ${monthPhotos.size}张",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("  ${monthPhotos.size}张",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                             }
                         }
                     }
                     item {
                         val chunked = monthPhotos.chunked(3)
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             chunked.forEach { row ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     row.forEach { photo ->
                                         Card(
                                             modifier = Modifier.weight(1f).aspectRatio(1f)
                                                 .clickable { lightboxPhoto = photo },
-                                            shape = RoundedCornerShape(12.dp)
+                                            shape = RoundedCornerShape(16.dp),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                         ) {
-                                            AsyncImage(
-                                                model = photo.url,
-                                                contentDescription = photo.caption,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
+                                            AsyncImage(model = photo.url, contentDescription = photo.caption,
+                                                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         }
                                     }
-                                    // Fill remaining slots with spacers
                                     repeat(3 - row.size) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -265,7 +234,7 @@ fun PhotosScreen() {
                         }
                     }
                 }
-                item { Spacer(Modifier.height(16.dp)) }
+                item { Spacer(Modifier.height(24.dp)) }
             }
         }
     }
@@ -284,16 +253,15 @@ fun PhotosScreen() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    AsyncImage(
-                        model = photo.url,
-                        contentDescription = photo.caption,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(photo.caption, color = Color.White,
-                        fontWeight = FontWeight.Medium)
+                    Card(shape = RoundedCornerShape(20.dp)) {
+                        AsyncImage(
+                            model = photo.url, contentDescription = photo.caption,
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(photo.caption, color = Color.White, fontWeight = FontWeight.Medium)
                     Text(photo.date, color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall)
                 }

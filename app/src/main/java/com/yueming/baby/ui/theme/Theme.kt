@@ -19,14 +19,21 @@ private val LightColorScheme = lightColorScheme(
     onPrimaryContainer = Pink20,
     secondary = Peach80,
     onSecondary = OnSurfaceLight,
+    tertiary = Pink60,
+    tertiaryContainer = Pink80,
     surface = SurfaceLight,
     surfaceContainer = SurfaceContainerLight,
-    surfaceContainerHigh = SurfaceContainerLight,
-    surfaceContainerHighest = SurfaceContainerLight.copy(alpha = 0.8f),
+    surfaceContainerHigh = SurfaceContainerLight.copy(alpha = 0.95f),
+    surfaceContainerHighest = SurfaceContainerLight.copy(alpha = 0.85f),
+    surfaceContainerLow = Color(0xFFFFF0EC),
     onSurface = OnSurfaceLight,
     onSurfaceVariant = Color(0xFF6B5B5B),
+    surfaceVariant = Color(0xFFF5E8E4),
+    outline = Color(0xFFD4C4C0),
+    outlineVariant = Color(0xFFE8DCD8),
     background = Color(0xFFFFF8F0),
     onBackground = OnSurfaceLight,
+    surfaceTint = Pink40,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -38,12 +45,17 @@ private val DarkColorScheme = darkColorScheme(
     tertiary = PinkTertiaryDark,
     surface = SurfaceDark,
     surfaceContainer = SurfaceContainerDark,
-    surfaceContainerHigh = SurfaceContainerDark,
-    surfaceContainerHighest = SurfaceContainerDark.copy(alpha = 0.8f),
+    surfaceContainerHigh = SurfaceContainerDark.copy(alpha = 0.92f),
+    surfaceContainerHighest = SurfaceContainerDark.copy(alpha = 0.85f),
+    surfaceContainerLow = Color(0xFF242028),
     onSurface = OnSurfaceDark,
     onSurfaceVariant = Color(0xFFCAC4D0),
+    surfaceVariant = Color(0xFF3D3840),
+    outline = Color(0xFF8A848C),
+    outlineVariant = Color(0xFF4A444C),
     background = Color(0xFF121212),
     onBackground = OnSurfaceDark,
+    surfaceTint = PinkPrimaryDark,
 )
 
 @Composable

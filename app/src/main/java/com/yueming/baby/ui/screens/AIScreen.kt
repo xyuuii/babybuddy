@@ -36,48 +36,30 @@ fun AIScreen() {
 
     val ageMonths = DataManager.getAgeInMonths(babyInfo.birthDate)
 
-    fun buildSystemPrompt(): String {
-        val recent = timeline
-            .sortedByDescending { it.date }
-            .take(5)
-            .joinToString("\n") { "- ${it.date}: ${it.title} - ${it.description}" }
-        return """You are a professional parenting advisor. The baby's information:
-- Name: ${babyInfo.name} (${babyInfo.nickname})
-- Gender: ${if (babyInfo.gender == "boy") "Boy" else "Girl"}
-- Age: $ageMonths months old
-- Birth date: ${babyInfo.birthDate}
-
-Recent growth records:
-${recent.ifEmpty { "No records yet." }}
-
-Provide warm, professional, and practical parenting advice based on the baby's data. Answer in Chinese. Keep responses concise (under 300 words)."""
-    }
-
     if (!isConfigured) {
         Box(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.SmartToy, null, Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                Spacer(Modifier.height(12.dp))
+                Icon(Icons.Default.SmartToy, null, Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                Spacer(Modifier.height(16.dp))
                 Text("AI 助手尚未配置",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text("在设置中配置 API Key，即可获得基于宝宝数据的智能育儿建议",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
                 Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    )
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Text("支持的模型：DeepSeek / Kimi / MiniMax / GLM / Qwen / GPT / Claude",
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(14.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -93,7 +75,6 @@ Provide warm, professional, and practical parenting advice based on the baby's d
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Header
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -101,34 +82,35 @@ Provide warm, professional, and practical parenting advice based on the baby's d
         ) {
             Text("AI 育儿助手",
                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            AssistChip(
-                onClick = {},
-                label = { Text(aiConfig.model, fontSize = 11.sp) }
-            )
+            AssistChip(onClick = {},
+                label = { Text(aiConfig.model, fontSize = 11.sp) },
+                shape = RoundedCornerShape(12.dp))
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // Messages
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.SmartToy, null, Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        Spacer(Modifier.height(8.dp))
-                        Text("${babyInfo.nickname}现在 ${ageMonths} 个月了",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("向我提问，我会基于成长数据给出建议",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.SmartToy, null, Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                            Spacer(Modifier.height(12.dp))
+                            Text("${babyInfo.nickname}现在 ${ageMonths} 个月了",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("向我提问，我会基于成长数据给出建议",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        }
                     }
                 }
             }
@@ -142,12 +124,12 @@ Provide warm, professional, and practical parenting advice based on the baby's d
                         modifier = Modifier
                             .widthIn(max = 280.dp)
                             .clip(RoundedCornerShape(
-                                topStart = 16.dp, topEnd = 16.dp,
-                                bottomStart = if (isUser) 16.dp else 4.dp,
-                                bottomEnd = if (isUser) 4.dp else 16.dp
+                                topStart = 18.dp, topEnd = 18.dp,
+                                bottomStart = if (isUser) 18.dp else 4.dp,
+                                bottomEnd = if (isUser) 4.dp else 18.dp
                             ))
                             .background(if (isUser) Color(0xFFF8C8D8) else MaterialTheme.colorScheme.surfaceContainer)
-                            .padding(12.dp)
+                            .padding(14.dp)
                     ) {
                         Text(msg.content, style = MaterialTheme.typography.bodySmall,
                             color = if (isUser) Color(0xFF3D2C2C) else MaterialTheme.colorScheme.onSurface)
@@ -156,8 +138,8 @@ Provide warm, professional, and practical parenting advice based on the baby's d
             }
             if (isLoading) {
                 item {
-                    Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             repeat(3) {
                                 Box(Modifier.size(8.dp).background(Color(0xFFEC407A), RoundedCornerShape(4.dp)))
                             }
@@ -167,7 +149,6 @@ Provide warm, professional, and practical parenting advice based on the baby's d
             }
         }
 
-        // Input bar
         Row(
             Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -180,7 +161,7 @@ Provide warm, professional, and practical parenting advice based on the baby's d
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 enabled = !isLoading,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(20.dp)
             )
             IconButton(
                 onClick = { /* AI send placeholder - requires network implementation */ },

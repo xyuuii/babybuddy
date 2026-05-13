@@ -73,6 +73,12 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
+    // OkHttp for WebDAV operations
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // WorkManager for scheduled backup
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -12,6 +12,9 @@ interface PhotoDao {
     @Query("SELECT * FROM photos ORDER BY date DESC")
     suspend fun getAllOnce(): List<PhotoEntity>
 
+    @Query("SELECT * FROM photos WHERE babyId = :babyId ORDER BY date DESC")
+    suspend fun getAllByBaby(babyId: String): List<PhotoEntity>
+
     @Query("SELECT * FROM photos WHERE id = :id")
     suspend fun getById(id: String): PhotoEntity?
 
@@ -27,9 +30,15 @@ interface PhotoDao {
     @Query("DELETE FROM photos WHERE timelineRecordId = :recordId")
     suspend fun deleteByRecordId(recordId: String)
 
+    @Query("DELETE FROM photos WHERE babyId = :babyId")
+    suspend fun deleteByBabyId(babyId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(photos: List<PhotoEntity>)
 
     @Query("SELECT COUNT(*) FROM photos")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM photos WHERE babyId = :babyId")
+    suspend fun countByBaby(babyId: String): Int
 }
