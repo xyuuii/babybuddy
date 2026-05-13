@@ -1,6 +1,7 @@
 package com.yueming.baby
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -38,11 +39,35 @@ import com.yueming.baby.ui.screens.*
 import com.yueming.baby.ui.theme.YueMingTheme
 import com.yueming.baby.ui.theme.ThemeMode
 import coil.compose.AsyncImage
+import java.io.StringWriter
+import java.io.PrintWriter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DataManager.init(applicationContext)
+
+        // Capture all crashes
+        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+            val sw = StringWriter()
+            throwable.printStackTrace(PrintWriter(sw))
+            val msg = "Crash: ${throwable.message}\n${sw.toString().take(500)}"
+            android.util.Log.e("YueMingCrash", msg)
+            // Show toast on main thread
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(this@MainActivity, "崩溃: ${throwable.message?.take(100)}", Toast.LENGTH_LONG).show()
+            }
+            // Terminate
+            android.os.Process.killProcess(android.os.Process.myPid())
+            System.exit(1)
+        }
+
+        try {
+            DataManager.init(applicationContext)
+        } catch (e: Exception) {
+            android.util.Log.e("YueMingCrash", "DataManager.init failed", e)
+            Toast.makeText(this, "初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+
         enableEdgeToEdge()
         setContent {
             val themeMode by DataManager.themeMode.collectAsState()
