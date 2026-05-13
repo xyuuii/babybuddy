@@ -146,7 +146,7 @@ fun TimelineScreen() {
                         items(records) { record ->
                             val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
                             ElevatedCard(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
                                 colors = CardDefaults.elevatedCardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -305,7 +305,8 @@ private fun AddRecordDialog(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null && selectedPhotos.size < 4) {
-            selectedPhotos = selectedPhotos + uri.toString()
+            val localPath = DataManager.copyPhotoToInternalStorage(uri)
+            selectedPhotos = selectedPhotos + (localPath ?: uri.toString())
         }
     }
 

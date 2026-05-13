@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -25,12 +26,14 @@ import kotlinx.coroutines.launch
 fun AIScreen() {
     val babyInfo by DataManager.babyInfo.collectAsState()
     val timeline by DataManager.timeline.collectAsState()
-    val aiConfig by DataManager.aiConfig.collectAsState()
+    val aiProfiles by DataManager.aiProfiles.collectAsState()
     val messages by DataManager.chatMessages.collectAsState()
 
     val isConfigured = DataManager.isAIConfigured
+    val activeProfile = DataManager.activeAIProfile
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var showProfilePicker by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -82,9 +85,36 @@ fun AIScreen() {
         ) {
             Text("AI 育儿助手",
                 style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            AssistChip(onClick = {},
-                label = { Text(aiConfig.model, fontSize = 11.sp) },
-                shape = RoundedCornerShape(12.dp))
+            Box {
+                AssistChip(
+                    onClick = { showProfilePicker = true },
+                    label = { Text(activeProfile?.name ?: "未配置", fontSize = 11.sp) },
+                    shape = RoundedCornerShape(12.dp)
+                )
+                DropdownMenu(
+                    expanded = showProfilePicker,
+                    onDismissRequest = { showProfilePicker = false }
+                ) {
+                    aiProfiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(profile.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                    Text("${profile.model}", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            },
+                            onClick = {
+                                DataManager.setActiveAIProfile(profile.id)
+                                showProfilePicker = false
+                            },
+                            leadingIcon = if (profile.isActive) {
+                                { Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary) }
+                            } else null
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(12.dp))

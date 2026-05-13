@@ -16,6 +16,23 @@ object DataManager {
     private var appContext: Context? = null
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // --- Photo storage helper ---
+    fun copyPhotoToInternalStorage(uri: android.net.Uri): String? {
+        val context = appContext ?: return null
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val photoDir = File(context.filesDir, "photos").also { it.mkdirs() }
+            val photoFile = File(photoDir, "photo-${java.util.UUID.randomUUID()}.jpg")
+            inputStream.use { input ->
+                photoFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            photoFile.absolutePath
+        } catch (e: Exception) {
+            android.util.Log.e("DataManager", "Failed to copy photo", e)
+            null
+        }
+    }
+
     // --- StateFlows ---
     private val _babies = MutableStateFlow<List<BabyInfo>>(emptyList())
     val babies: StateFlow<List<BabyInfo>> = _babies.asStateFlow()
@@ -42,6 +59,12 @@ object DataManager {
 
     private val _aiConfig = MutableStateFlow(AIConfig())
     val aiConfig: StateFlow<AIConfig> = _aiConfig.asStateFlow()
+
+    private val _aiProfiles = MutableStateFlow<List<AIProfile>>(emptyList())
+    val aiProfiles: StateFlow<List<AIProfile>> = _aiProfiles.asStateFlow()
+
+    val activeAIProfile: AIProfile?
+        get() = _aiProfiles.value.firstOrNull { it.isActive }
 
     private val _chatMessages = MutableStateFlow(emptyList<ChatMessage>())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
@@ -149,12 +172,34 @@ object DataManager {
             } catch (_: Exception) {}
         }
 
-        // Load AI config
+        // Load AI config (legacy)
         val aiJson = database.settingsDao().get("ai_config")?.value
         if (aiJson != null) {
             try {
                 _aiConfig.value = gson.fromJson(aiJson, AIConfig::class.java)
             } catch (_: Exception) {}
+        }
+
+        // Load AI profiles
+        val profilesJson = database.settingsDao().get("ai_profiles")?.value
+        if (profilesJson != null) {
+            try {
+                val type = object : TypeToken<List<AIProfile>>() {}.type
+                _aiProfiles.value = gson.fromJson(profilesJson, type)
+            } catch (_: Exception) {}
+        }
+
+        // If no profiles exist, migrate legacy config
+        if (_aiProfiles.value.isEmpty() && _aiConfig.value.apiKey.isNotEmpty()) {
+            val legacyProfile = AIProfile(
+                name = "默认配置",
+                apiBaseUrl = _aiConfig.value.apiBaseUrl,
+                apiKey = _aiConfig.value.apiKey,
+                model = _aiConfig.value.model,
+                isActive = true
+            )
+            _aiProfiles.value = listOf(legacyProfile)
+            persistAIPprofiles()
         }
 
         // Load theme
@@ -360,7 +405,7 @@ object DataManager {
         }
     }
 
-    // --- AI Config ---
+    // --- AI Config (legacy, kept for backward compat) ---
     fun updateAIConfig(config: AIConfig) { _aiConfig.value = config
         db?.let { database ->
             val json = Gson().toJson(config)
@@ -369,7 +414,77 @@ object DataManager {
             }
         }
     }
-    val isAIConfigured: Boolean get() = _aiConfig.value.apiKey.isNotEmpty()
+    val isAIConfigured: Boolean get() {
+        val profile = _aiProfiles.value.firstOrNull { it.isActive }
+        return profile != null && profile.apiKey.isNotEmpty()
+    }
+
+    // --- AI Profile Management ---
+    private fun persistAIPprofiles() {
+        db?.let { database ->
+            val json = Gson().toJson(_aiProfiles.value)
+            appScope.launch {
+                database.settingsDao().upsert(SettingsEntity("ai_profiles", json))
+            }
+        }
+    }
+
+    fun addAIProfile(profile: AIProfile) {
+        _aiProfiles.value = (_aiProfiles.value + profile).toMutableList()
+        persistAIPprofiles()
+    }
+
+    fun updateAIProfile(profile: AIProfile) {
+        _aiProfiles.value = _aiProfiles.value.map {
+            if (it.id == profile.id) profile else it
+        }.toMutableList()
+        persistAIPprofiles()
+    }
+
+    fun deleteAIProfile(profileId: String) {
+        _aiProfiles.value = _aiProfiles.value.filter { it.id != profileId }.toMutableList()
+        // If we deleted the active profile, activate the first remaining one
+        if (_aiProfiles.value.none { it.isActive } && _aiProfiles.value.isNotEmpty()) {
+            val first = _aiProfiles.value.first()
+            _aiProfiles.value = _aiProfiles.value.map {
+                if (it.id == first.id) it.copy(isActive = true) else it
+            }.toMutableList()
+        }
+        persistAIPprofiles()
+    }
+
+    fun setActiveAIProfile(profileId: String) {
+        _aiProfiles.value = _aiProfiles.value.map {
+            it.copy(isActive = it.id == profileId)
+        }.toMutableList()
+        persistAIPprofiles()
+    }
+
+    fun testAIProfileConnection(profile: AIProfile, onResult: (Result<Boolean>) -> Unit) {
+        appScope.launch {
+            try {
+                val baseUrl = profile.apiBaseUrl
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val request = okhttp3.Request.Builder()
+                    .url(baseUrl)
+                    .header("Authorization", "Bearer ${profile.apiKey}")
+                    .build()
+                val response = client.newCall(request).execute()
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful || response.code == 401 || response.code == 403) {
+                        onResult(Result.success(true))
+                    } else {
+                        onResult(Result.failure(Exception("HTTP ${response.code}")))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(Result.failure(e)) }
+            }
+        }
+    }
 
     // --- Chat ---
     fun addMessage(msg: ChatMessage) {
@@ -584,6 +699,7 @@ object DataManager {
                 _activeBaby.value = sampleBaby
                 _customCategories.value = emptyList()
                 _aiConfig.value = AIConfig()
+                _aiProfiles.value = emptyList()
                 _chatMessages.value = emptyList()
                 _themeMode.value = ThemeMode.SYSTEM
                 _webDavConfig.value = null

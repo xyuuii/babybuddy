@@ -8,7 +8,9 @@
         android:icon="@mipmap/ic_launcher"
         android:label="悦萌 YueMing"
         android:supportsRtl="true"
-        android:theme="@style/Theme.YueMing">
+        android:theme="@style/Theme.YueMing"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,5 +1,6 @@
 package com.yueming.baby.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -9,7 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -27,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
+import java.time.LocalDate
+import java.util.UUID
 
 @Composable
 fun DashboardScreen() {
@@ -55,12 +60,14 @@ fun DashboardScreen() {
     )
 
     var showAddBaby by remember { mutableStateOf(false) }
+    var showGrowthEntry by remember { mutableStateOf(false) }
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            DataManager.updateBabyInfo(babyInfo.copy(avatar = uri.toString()))
+            val localPath = DataManager.copyPhotoToInternalStorage(uri)
+            DataManager.updateBabyInfo(babyInfo.copy(avatar = localPath ?: uri.toString()))
         }
     }
 
@@ -169,7 +176,7 @@ fun DashboardScreen() {
         if (upcomingMilestones.isNotEmpty()) {
             item {
                 ElevatedCard(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
@@ -207,9 +214,10 @@ fun DashboardScreen() {
         // Growth chart
         item {
             ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                modifier = Modifier.clickable { showGrowthEntry = true }
             ) {
                 Column(Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -273,7 +281,7 @@ fun DashboardScreen() {
                 item {
                     val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
                     ElevatedCard(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(20.dp),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
                         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                     ) {
@@ -344,7 +352,7 @@ fun DashboardScreen() {
         // Milk brand quick reference
         item {
             ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
@@ -382,7 +390,7 @@ fun DashboardScreen() {
         // Parenting tip
         item {
             ElevatedCard(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
@@ -419,6 +427,17 @@ fun DashboardScreen() {
             }
         )
     }
+
+    // Growth Entry Sheet
+    if (showGrowthEntry) {
+        GrowthEntrySheet(
+            onDismiss = { showGrowthEntry = false },
+            onSave = { record ->
+                DataManager.addRecord(record)
+                showGrowthEntry = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -428,11 +447,11 @@ private fun AnimatedStatCard(
     value: String,
     label: String
 ) {
-    ElevatedCard(
-        modifier = modifier.animateContentSize(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(
@@ -509,3 +528,101 @@ private val TIPS = listOf(
     Tip(9 to 11, "语言爆发期将至，多和宝宝对话、读绘本。"),
     Tip(12 to 99, "进入幼儿期，语言和社交能力快速发展，多户外活动。")
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GrowthEntrySheet(
+    onDismiss: () -> Unit,
+    onSave: (TimelineRecord) -> Unit
+) {
+    val context = LocalContext.current
+    val cal = java.util.Calendar.getInstance()
+    var height by remember { mutableStateOf("") }
+    var weight by remember { mutableStateOf("") }
+    var date by remember {
+        mutableStateOf("%04d-%02d-%02d".format(
+            cal.get(java.util.Calendar.YEAR),
+            cal.get(java.util.Calendar.MONTH) + 1,
+            cal.get(java.util.Calendar.DAY_OF_MONTH)
+        ))
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("记录身长体重", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            OutlinedTextField(
+                value = height,
+                onValueChange = { height = it.filter { c -> c.isDigit() || c == '.' } },
+                label = { Text("身高 (cm)") },
+                placeholder = { Text("如：78.5") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = weight,
+                onValueChange = { weight = it.filter { c -> c.isDigit() || c == '.' } },
+                label = { Text("体重 (kg，可选)") },
+                placeholder = { Text("如：10.2") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedButton(
+                onClick = {
+                    val d = LocalDate.parse(date)
+                    DatePickerDialog(context, { _, y, m, day ->
+                        date = "%04d-%02d-%02d".format(y, m + 1, day)
+                    }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("日期: $date", fontSize = 13.sp)
+            }
+
+            Button(
+                onClick = {
+                    val h = height.trim()
+                    if (h.isNotEmpty()) {
+                        val descParts = mutableListOf("身长${h}cm")
+                        val w = weight.trim()
+                        if (w.isNotEmpty()) descParts.add("体重${w}kg")
+                        val desc = descParts.joinToString("，")
+
+                        onSave(TimelineRecord(
+                            id = "growth-${UUID.randomUUID().toString().take(8)}",
+                            date = date,
+                            title = "身长${h}cm" + if (w.isNotEmpty()) " 体重${w}kg" else "",
+                            description = desc,
+                            category = "growth",
+                            tags = listOfNotNull(
+                                "身长",
+                                if (w.isNotEmpty()) "体重" else null,
+                                "生长发育"
+                            )
+                        ))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                shape = RoundedCornerShape(16.dp),
+                enabled = height.trim().isNotEmpty()
+            ) { Text("保存记录", color = Color.White) }
+        }
+    }
+}

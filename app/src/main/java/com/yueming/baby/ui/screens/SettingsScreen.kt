@@ -280,12 +280,18 @@ fun SettingsScreen() {
     if (showBabySheet) {
         BabyInfoSheet(
             babyInfo = babyInfo,
+            babies = babies,
             onDismiss = { showBabySheet = false },
             onSave = { info ->
                 DataManager.updateBabyInfo(info)
                 showBabySheet = false
             },
-            onAddBaby = { showAddBabySheet = true }
+            onAddBaby = { showAddBabySheet = true },
+            onDelete = { babyId ->
+                DataManager.deleteBaby(babyId) {
+                    showBabySheet = false
+                }
+            }
         )
     }
 
@@ -302,12 +308,24 @@ fun SettingsScreen() {
 
     // AI Config Sheet
     if (showAISheet) {
+        val profiles by DataManager.aiProfiles.collectAsState()
         AIConfigSheet(
-            aiConfig = aiConfig,
+            profiles = profiles,
             onDismiss = { showAISheet = false },
-            onSave = { config ->
-                DataManager.updateAIConfig(config)
-                showAISheet = false
+            onSaveProfile = { profile ->
+                DataManager.updateAIProfile(profile)
+            },
+            onAddProfile = { profile ->
+                DataManager.addAIProfile(profile)
+            },
+            onDeleteProfile = { id ->
+                DataManager.deleteAIProfile(id)
+            },
+            onSetActive = { id ->
+                DataManager.setActiveAIProfile(id)
+            },
+            onTestConnection = { profile, callback ->
+                DataManager.testAIProfileConnection(profile, callback)
             }
         )
     }
@@ -415,18 +433,22 @@ private fun SettingsGroupCard(
 @Composable
 private fun BabyInfoSheet(
     babyInfo: BabyInfo,
+    babies: List<BabyInfo>,
     onDismiss: () -> Unit,
     onSave: (BabyInfo) -> Unit,
-    onAddBaby: () -> Unit
+    onAddBaby: () -> Unit,
+    onDelete: (String) -> Unit
 ) {
     var form by remember { mutableStateOf(babyInfo) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            form = form.copy(avatar = uri.toString())
+            val localPath = DataManager.copyPhotoToInternalStorage(uri)
+            form = form.copy(avatar = localPath ?: uri.toString())
         }
     }
 
@@ -511,7 +533,37 @@ private fun BabyInfoSheet(
                     shape = RoundedCornerShape(16.dp)
                 ) { Text("添加宝宝") }
             }
+            if (babies.size > 1) {
+                OutlinedButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
+                ) {
+                    Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("删除宝宝", color = Color(0xFFEF5350))
+                }
+            }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("确认删除", fontWeight = FontWeight.Bold) },
+            text = { Text("确定要删除「${babyInfo.nickname}」吗？该宝宝的所有记录和照片也将被删除。此操作不可撤销。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete(babyInfo.id)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
+                ) { Text("删除", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+        )
     }
 }
 
@@ -581,55 +633,310 @@ private fun AddBabySheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AIConfigSheet(
-    aiConfig: AIConfig,
+    profiles: List<AIProfile>,
     onDismiss: () -> Unit,
-    onSave: (AIConfig) -> Unit
+    onSaveProfile: (AIProfile) -> Unit,
+    onAddProfile: (AIProfile) -> Unit,
+    onDeleteProfile: (String) -> Unit,
+    onSetActive: (String) -> Unit,
+    onTestConnection: (AIProfile, (Result<Boolean>) -> Unit) -> Unit
 ) {
-    var form by remember { mutableStateOf(aiConfig) }
+    var editingProfile by remember { mutableStateOf<AIProfile?>(null) }
+    var showAddForm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        if (editingProfile != null) {
+            // Profile edit mode
+            AIProfileEditForm(
+                profile = editingProfile!!,
+                isNew = showAddForm,
+                onSave = {
+                    if (showAddForm) onAddProfile(it) else onSaveProfile(it)
+                    editingProfile = null
+                    showAddForm = false
+                },
+                onCancel = { editingProfile = null; showAddForm = false },
+                onTestConnection = onTestConnection
+            )
+        } else {
+            // Profile list mode
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("AI 配置文件管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                if (profiles.isEmpty()) {
+                    Text("尚未配置 AI 配置文件",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp))
+                }
+
+                profiles.forEach { profile ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (profile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            else MaterialTheme.colorScheme.surfaceContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(profile.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold)
+                                        if (profile.isActive) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(
+                                                Modifier.clip(RoundedCornerShape(6.dp))
+                                                    .background(MaterialTheme.colorScheme.primary)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("活跃", fontSize = 10.sp, color = Color.White)
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    Text("${profile.model} · ${profile.apiBaseUrl}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (!profile.isActive) {
+                                    OutlinedButton(
+                                        onClick = { onSetActive(profile.id) },
+                                        modifier = Modifier.height(32.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) { Text("启用", fontSize = 11.sp) }
+                                }
+                                OutlinedButton(
+                                    onClick = { editingProfile = profile },
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) { Text("编辑", fontSize = 11.sp) }
+                                OutlinedButton(
+                                    onClick = { showDeleteConfirm = profile.id },
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
+                                ) { Text("删除", fontSize = 11.sp) }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        editingProfile = AIProfile(
+                            apiBaseUrl = "https://api.deepseek.com",
+                            model = "deepseek-chat",
+                            isActive = profiles.isEmpty()
+                        )
+                        showAddForm = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("添加配置", color = Color.White)
+                }
+            }
+        }
+    }
+
+    // Delete confirmation
+    showDeleteConfirm?.let { profileId ->
+        val profile = profiles.find { it.id == profileId }
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            title = { Text("确认删除", fontWeight = FontWeight.Bold) },
+            text = { Text("确定要删除配置「${profile?.name ?: ""}」吗？") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteProfile(profileId)
+                        showDeleteConfirm = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
+                ) { Text("删除", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = null }) { Text("取消") } }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AIProfileEditForm(
+    profile: AIProfile,
+    isNew: Boolean,
+    onSave: (AIProfile) -> Unit,
+    onCancel: () -> Unit,
+    onTestConnection: (AIProfile, (Result<Boolean>) -> Unit) -> Unit
+) {
+    var form by remember { mutableStateOf(profile) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("AI 助手配置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OutlinedTextField(
-                value = form.apiBaseUrl, onValueChange = { form = form.copy(apiBaseUrl = it) },
-                label = { Text("API Base URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+            Text(
+                if (isNew) "新建配置" else "编辑配置",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
-            OutlinedTextField(
-                value = form.apiKey, onValueChange = { form = form.copy(apiKey = it) },
-                label = { Text("API Key") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-            Text("模型选择", fontWeight = FontWeight.Medium)
-            AI_MODELS.forEach { model ->
-                Row(Modifier.fillMaxWidth()
+            TextButton(onClick = onCancel) { Text("返回") }
+        }
+
+        OutlinedTextField(
+            value = form.name, onValueChange = { form = form.copy(name = it) },
+            label = { Text("配置名称") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = form.apiBaseUrl, onValueChange = { form = form.copy(apiBaseUrl = it) },
+            label = { Text("API Base URL") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = form.apiKey, onValueChange = { form = form.copy(apiKey = it) },
+            label = { Text("API Key") },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Text("模型选择", fontWeight = FontWeight.Medium)
+        AI_MODELS.forEach { model ->
+            Row(
+                Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .clickable { form = form.copy(model = model.id) }
                     .background(if (form.model == model.id) Color(0xFFEC407A).copy(alpha = 0.1f) else Color.Transparent)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column {
-                        Text(model.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                        Text(model.provider, style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (form.model == model.id) {
-                        Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = Color(0xFFEC407A))
-                    }
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(model.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text(model.provider, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (form.model == model.id) {
+                    Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = Color(0xFFEC407A))
                 }
             }
+        }
+
+        OutlinedTextField(
+            value = form.systemPrompt, onValueChange = { form = form.copy(systemPrompt = it) },
+            label = { Text("系统提示词") },
+            modifier = Modifier.fillMaxWidth(), minLines = 2,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Text("温度: %.1f".format(form.temperature),
+            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        Slider(
+            value = form.temperature, onValueChange = { form = form.copy(temperature = it) },
+            valueRange = 0f..2f,
+            steps = 19,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("最大 Token 数: ${form.maxTokens}",
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            OutlinedButton(
+                onClick = {
+                    val options = listOf(512, 1024, 2048, 4096, 8192)
+                    val idx = options.indexOf(form.maxTokens)
+                    val nextIdx = (idx + 1) % options.size
+                    form = form.copy(maxTokens = options[nextIdx])
+                },
+                modifier = Modifier.height(28.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) { Text("切换", fontSize = 11.sp) }
+        }
+
+        testResult?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall,
+                color = if (it.contains("成功") || it.contains("通过")) Color(0xFF4CAF50) else Color(0xFFEF5350))
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    if (form.apiBaseUrl.isNotBlank()) {
+                        isTesting = true
+                        testResult = null
+                        onTestConnection(form) { result ->
+                            isTesting = false
+                            testResult = result.fold(
+                                onSuccess = { "连接成功！" },
+                                onFailure = { "连接失败: ${it.message}" }
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = !isTesting && form.apiBaseUrl.isNotBlank(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
+                Text("测试连接", fontSize = 13.sp)
+            }
             Button(
-                onClick = { onSave(form) },
-                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (form.name.isNotBlank() && form.apiBaseUrl.isNotBlank()) {
+                        onSave(form)
+                    }
+                },
+                modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                shape = RoundedCornerShape(16.dp)
-            ) { Text("保存配置", color = Color.White) }
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("保存", color = Color.White) }
         }
     }
 }

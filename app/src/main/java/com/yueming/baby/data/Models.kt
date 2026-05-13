@@ -85,6 +85,18 @@ data class AIConfig(
     val model: String = "deepseek-chat"
 )
 
+data class AIProfile(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String = "默认配置",
+    val apiBaseUrl: String = "https://api.deepseek.com",
+    val apiKey: String = "",
+    val model: String = "deepseek-chat",
+    val systemPrompt: String = "你是一个专业的育儿助手，基于宝宝数据提供科学、温暖的育儿建议。",
+    val temperature: Float = 0.7f,
+    val maxTokens: Int = 2048,
+    val isActive: Boolean = false
+)
+
 data class AIModel(
     val id: String,
     val name: String,

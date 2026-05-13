@@ -48,9 +48,10 @@ fun PhotosScreen() {
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
+            val localPath = DataManager.copyPhotoToInternalStorage(uri)
             DataManager.addPhoto(PhotoEntry(
                 id = "photo-${UUID.randomUUID().toString().take(8)}",
-                url = uri.toString(),
+                url = localPath ?: uri.toString(),
                 caption = photoCaption.ifBlank { "照片" },
                 date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
                 tags = emptyList()
