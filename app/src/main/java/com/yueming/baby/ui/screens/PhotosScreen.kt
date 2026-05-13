@@ -15,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,7 @@ fun PhotosScreen() {
     var photoUrl by remember { mutableStateOf("") }
     var showUrlInput by remember { mutableStateOf(false) }
     var lightboxPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
+    var selectedVideoPath by remember { mutableStateOf<String?>(null) }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -58,6 +61,25 @@ fun PhotosScreen() {
             ))
             photoCaption = ""
             showUpload = false
+        }
+    }
+
+    val videoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            val localPath = DataManager.copyVideoToInternalStorage(uri)
+            selectedVideoPath = localPath ?: uri.toString()
+            DataManager.addPhoto(PhotoEntry(
+                id = "photo-${UUID.randomUUID().toString().take(8)}",
+                url = selectedVideoPath!!,
+                caption = photoCaption.ifBlank { "视频" },
+                date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                tags = listOf("视频")
+            ))
+            photoCaption = ""
+            showUpload = false
+            selectedVideoPath = null
         }
     }
 
@@ -131,7 +153,15 @@ fun PhotosScreen() {
                         ) {
                             Icon(Icons.Default.PhotoLibrary, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("从相册选择", fontSize = 12.sp)
+                            Text("添加照片", fontSize = 12.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { videoPicker.launch("video/*") },
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Videocam, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("添加视频", fontSize = 12.sp)
                         }
                         OutlinedButton(
                             onClick = { showUrlInput = !showUrlInput },
@@ -223,8 +253,21 @@ fun PhotosScreen() {
                                             shape = RoundedCornerShape(16.dp),
                                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                         ) {
-                                            AsyncImage(model = photo.url, contentDescription = photo.caption,
-                                                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                            Box(contentAlignment = Alignment.Center) {
+                                                AsyncImage(model = photo.url, contentDescription = photo.caption,
+                                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                                if (photo.tags.contains("视频")) {
+                                                    Icon(
+                                                        Icons.Default.PlayArrow,
+                                                        contentDescription = null,
+                                                        modifier = Modifier
+                                                            .size(24.dp)
+                                                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                                            .padding(2.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                     repeat(3 - row.size) {

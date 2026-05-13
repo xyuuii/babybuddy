@@ -185,7 +185,7 @@ ${recentRecords.ifBlank { "暂无记录" }}
                     }
                 }
             }
-            items(messages) { msg ->
+            items(messages, key = { it.id }) { msg ->
                 val isUser = msg.role == "user"
                 Row(
                     modifier = Modifier.fillMaxWidth(),

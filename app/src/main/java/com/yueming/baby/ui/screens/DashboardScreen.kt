@@ -319,7 +319,7 @@ fun DashboardScreen() {
             }
         } else {
             recentRecords.forEach { record ->
-                item {
+                item(key = record.id) {
                     val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
                     ElevatedCard(
                         shape = RoundedCornerShape(20.dp),
@@ -587,7 +587,27 @@ private fun GrowthEntrySheet(
             cal.get(java.util.Calendar.DAY_OF_MONTH)
         ))
     }
+    var selectedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
     var showGrowthDatePicker by remember { mutableStateOf(false) }
+
+    val growthPhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null && selectedPhotos.size < 4) {
+            val localPath = DataManager.copyPhotoToInternalStorage(uri)
+            selectedPhotos = selectedPhotos + (localPath ?: uri.toString())
+        }
+    }
+
+    val growthVideoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null && selectedVideos.size < 3) {
+            val localPath = DataManager.copyVideoToInternalStorage(uri)
+            selectedVideos = selectedVideos + (localPath ?: uri.toString())
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -632,6 +652,82 @@ private fun GrowthEntrySheet(
                 Text("日期: $date", fontSize = 13.sp)
             }
 
+            // Photo selection
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                selectedPhotos.forEach { uri ->
+                    Box(
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.TopEnd
+                    ) {
+                        AsyncImage(model = uri, contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        IconButton(
+                            onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
+                            modifier = Modifier.size(20.dp).align(Alignment.TopEnd)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
+                        }
+                    }
+                }
+                if (selectedPhotos.size < 4) {
+                    OutlinedButton(
+                        onClick = { growthPhotoPicker.launch("image/*") },
+                        modifier = Modifier.size(64.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Default.Add, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
+                    }
+                }
+            }
+
+            // Video selection
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                selectedVideos.forEach { path ->
+                    Box(
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.TopEnd
+                    ) {
+                        AsyncImage(model = path, contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                .padding(2.dp),
+                            tint = Color.White
+                        )
+                        IconButton(
+                            onClick = { selectedVideos = selectedVideos.filter { it != path } },
+                            modifier = Modifier.size(20.dp).align(Alignment.TopEnd)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
+                        }
+                    }
+                }
+                if (selectedVideos.size < 3) {
+                    OutlinedButton(
+                        onClick = { growthVideoPicker.launch("video/*") },
+                        modifier = Modifier.size(64.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Default.Videocam, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
+                    }
+                }
+            }
+
             Button(
                 onClick = {
                     val h = height.trim()
@@ -651,7 +747,9 @@ private fun GrowthEntrySheet(
                                 "身长",
                                 if (w.isNotEmpty()) "体重" else null,
                                 "生长发育"
-                            )
+                            ),
+                            photos = selectedPhotos,
+                            videos = selectedVideos
                         ))
                     }
                 },
@@ -794,6 +892,7 @@ private fun MilestoneEntrySheet(
         ))
     }
     var selectedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
     var showMilestoneDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -803,6 +902,15 @@ private fun MilestoneEntrySheet(
         if (uri != null && selectedPhotos.size < 4) {
             val localPath = DataManager.copyPhotoToInternalStorage(uri)
             selectedPhotos = selectedPhotos + (localPath ?: uri.toString())
+        }
+    }
+
+    val videoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null && selectedVideos.size < 3) {
+            val localPath = DataManager.copyVideoToInternalStorage(uri)
+            selectedVideos = selectedVideos + (localPath ?: uri.toString())
         }
     }
 
@@ -878,6 +986,49 @@ private fun MilestoneEntrySheet(
                 }
             }
 
+            // Video selection
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                selectedVideos.forEach { path ->
+                    Box(
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.TopEnd
+                    ) {
+                        AsyncImage(model = path, contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                .padding(2.dp),
+                            tint = Color.White
+                        )
+                        IconButton(
+                            onClick = { selectedVideos = selectedVideos.filter { it != path } },
+                            modifier = Modifier.size(20.dp).align(Alignment.TopEnd)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
+                        }
+                    }
+                }
+                if (selectedVideos.size < 3) {
+                    OutlinedButton(
+                        onClick = { videoPicker.launch("video/*") },
+                        modifier = Modifier.size(64.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Default.Videocam, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
+                    }
+                }
+            }
+
             Button(
                 onClick = {
                     if (title.isNotBlank()) {
@@ -888,7 +1039,8 @@ private fun MilestoneEntrySheet(
                             description = description.trim(),
                             category = milestone.category,
                             tags = listOf("里程碑", milestone.title),
-                            photos = selectedPhotos
+                            photos = selectedPhotos,
+                            videos = selectedVideos
                         ))
                     }
                 },

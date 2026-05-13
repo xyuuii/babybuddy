@@ -149,7 +149,9 @@ fun SettingsScreen() {
                             onClick = {
                                 DataManager.uploadBackup(
                                     onProgress = { msg ->
-                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        scope.launch {
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
                                     },
                                     onComplete = { result ->
                                         result.onSuccess {
@@ -371,7 +373,9 @@ fun SettingsScreen() {
             onRestore = { filename ->
                 DataManager.downloadBackup(filename,
                     onProgress = { msg ->
-                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        scope.launch {
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        }
                     },
                     onComplete = { result ->
                         result.onSuccess { bytes ->

@@ -33,6 +33,23 @@ object DataManager {
         }
     }
 
+    // --- Video storage helper ---
+    fun copyVideoToInternalStorage(uri: android.net.Uri): String? {
+        val context = appContext ?: return null
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val videoDir = java.io.File(context.filesDir, "videos").also { it.mkdirs() }
+            val videoFile = java.io.File(videoDir, "video-${java.util.UUID.randomUUID()}.mp4")
+            inputStream.use { input ->
+                videoFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            videoFile.absolutePath
+        } catch (e: Exception) {
+            android.util.Log.e("DataManager", "Failed to copy video", e)
+            null
+        }
+    }
+
     // --- StateFlows ---
     private val _babies = MutableStateFlow<List<BabyInfo>>(emptyList())
     val babies: StateFlow<List<BabyInfo>> = _babies.asStateFlow()

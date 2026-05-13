@@ -101,7 +101,7 @@ fun TimelineScreen() {
                         label = { Text("全部", fontSize = 12.sp) }
                     )
                 }
-                items(allCategories) { cat ->
+                items(allCategories, key = { it.id }) { cat ->
                     val catColor = Color(cat.color)
                     FilterChip(
                         selected = activeCategory == cat.id,
@@ -199,6 +199,36 @@ fun TimelineScreen() {
                                                 }
                                             }
                                         }
+                                        if (record.videos.isNotEmpty()) {
+                                            Spacer(Modifier.height(8.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                record.videos.take(3).forEach { path ->
+                                                    Card(
+                                                        modifier = Modifier.size(52.dp),
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            AsyncImage(
+                                                                model = path,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                contentScale = ContentScale.Crop
+                                                            )
+                                                            Icon(
+                                                                Icons.Default.PlayArrow,
+                                                                contentDescription = null,
+                                                                modifier = Modifier
+                                                                    .size(20.dp)
+                                                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                                                    .padding(2.dp),
+                                                                tint = Color.White
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         if (record.tags.isNotEmpty()) {
                                             Spacer(Modifier.height(8.dp))
                                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -291,6 +321,7 @@ private fun AddRecordDialog(
     var category by remember { mutableStateOf(initialData?.category ?: "milestone") }
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
     var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
+    var selectedVideos by remember { mutableStateOf(initialData?.videos ?: emptyList()) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     val allCategories = DataManager.allCategories
@@ -313,6 +344,15 @@ private fun AddRecordDialog(
         if (uri != null && selectedPhotos.size < 4) {
             val localPath = DataManager.copyPhotoToInternalStorage(uri)
             selectedPhotos = selectedPhotos + (localPath ?: uri.toString())
+        }
+    }
+
+    val videoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null && selectedVideos.size < 3) {
+            val localPath = DataManager.copyVideoToInternalStorage(uri)
+            selectedVideos = selectedVideos + (localPath ?: uri.toString())
         }
     }
 
@@ -415,6 +455,49 @@ private fun AddRecordDialog(
                     }
                 }
 
+                Text("视频 (${selectedVideos.size}/3)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    selectedVideos.forEach { path ->
+                        Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
+                            AsyncImage(
+                                model = path,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(24.dp)
+                                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                                    .padding(2.dp),
+                                tint = Color.White
+                            )
+                            IconButton(
+                                onClick = { selectedVideos = selectedVideos.filter { it != path } },
+                                modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            ) {
+                                Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
+                            }
+                        }
+                    }
+                    if (selectedVideos.size < 3) {
+                        OutlinedButton(
+                            onClick = { videoPicker.launch("video/*") },
+                            modifier = Modifier.size(72.dp),
+                            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Videocam, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
+                        }
+                    }
+                }
+
                 if (tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         tags.forEach { tag ->
@@ -444,7 +527,7 @@ private fun AddRecordDialog(
                         onSave(TimelineRecord(
                             id = initialData?.id ?: "record-${UUID.randomUUID().toString().take(8)}",
                             date = date, title = title.trim(), description = description.trim(),
-                            category = category, tags = tags, photos = selectedPhotos
+                            category = category, tags = tags, photos = selectedPhotos, videos = selectedVideos
                         ))
                     }
                 },

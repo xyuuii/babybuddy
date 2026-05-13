@@ -139,8 +139,8 @@ fun BabySwitcher(
 
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(28.dp))
             .clickable { expanded = true }
+            .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f))
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
