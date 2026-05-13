@@ -40,8 +40,10 @@ data class CategoryConfig(
     val label: String,
     val icon: String,
     val color: Long,
-    val isDefault: Boolean
+    val isDefault: Boolean,
+    val children: List<SubCategory> = emptyList()
 ) {
+    data class SubCategory(val id: String, val name: String)
     fun colorValue(): Color = Color(color)
 }
 

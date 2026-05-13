@@ -1,5 +1,6 @@
 package com.yueming.baby.ui.screens
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -473,6 +474,10 @@ fun DashboardScreen() {
         GrowthEntrySheet(
             onDismiss = { showGrowthEntry = false },
             onSave = { record ->
+                if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
+                    Toast.makeText(context, "请先在首页添加宝宝信息", Toast.LENGTH_SHORT).show()
+                    return@GrowthEntrySheet
+                }
                 DataManager.addRecord(record)
                 showGrowthEntry = false
             }
@@ -497,6 +502,10 @@ fun DashboardScreen() {
             milestone = milestone,
             onDismiss = { milestoneEntryData = null },
             onSave = { record ->
+                if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
+                    Toast.makeText(context, "请先在首页添加宝宝信息", Toast.LENGTH_SHORT).show()
+                    return@MilestoneEntrySheet
+                }
                 DataManager.addRecord(record)
                 milestoneEntryData = null
             }

@@ -1009,6 +1009,11 @@ private fun CategorySheet(
     var showAdd by remember { mutableStateOf(false) }
     var newLabel by remember { mutableStateOf("") }
     var newColor by remember { mutableStateOf(0xFFf8c8d8) }
+    var expandedCategoryId by remember { mutableStateOf<String?>(null) }
+    var showAddSub by remember { mutableStateOf<String?>(null) }
+    var newSubName by remember { mutableStateOf("") }
+    var editingSub by remember { mutableStateOf<Pair<String, CategoryConfig.SubCategory>?>(null) }
+    var editSubName by remember { mutableStateOf("") }
 
     val presetColors = listOf(0xFFf8c8d8, 0xFFf6ba6d, 0xFFa5d8dd, 0xFFc4b5fd, 0xFF86efac, 0xFFfde68a)
 
@@ -1017,31 +1022,139 @@ private fun CategorySheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text("分类管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
             categories.forEach { cat ->
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                val isExpanded = expandedCategoryId == cat.id
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { expandedCategoryId = if (isExpanded) null else cat.id },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color(cat.color)))
-                        Spacer(Modifier.width(10.dp))
-                        Text(cat.label, style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (cat.isDefault) {
-                        Icon(Icons.Default.Lock, null, Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                    } else {
-                        IconButton(onClick = { onRemove(cat.id) }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Default.Close, null, Modifier.size(16.dp), tint = Color(0xFFEF5350))
+                    Column {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color(cat.color)))
+                                Spacer(Modifier.width(10.dp))
+                                Text(cat.label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                if (cat.children.isNotEmpty()) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("(${cat.children.size})", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (cat.isDefault) {
+                                    Icon(Icons.Default.Lock, null, Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                                } else {
+                                    IconButton(onClick = { onRemove(cat.id) }, modifier = Modifier.size(28.dp)) {
+                                        Icon(Icons.Default.Close, null, Modifier.size(16.dp), tint = Color(0xFFEF5350))
+                                    }
+                                }
+                                Icon(
+                                    if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    null, Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+                                HorizontalDivider()
+                                Spacer(Modifier.height(6.dp))
+
+                                cat.children.forEach { sub ->
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.SubdirectoryArrowRight, null, Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(sub.name, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        TextButton(
+                                            onClick = {
+                                                editingSub = cat.id to sub
+                                                editSubName = sub.name
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) {
+                                            Icon(Icons.Default.Edit, null, Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("编辑", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+
+                                if (cat.children.isEmpty()) {
+                                    Text("暂无子分类",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+                                }
+
+                                Spacer(Modifier.height(4.dp))
+
+                                if (showAddSub == cat.id) {
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = newSubName, onValueChange = { newSubName = it },
+                                            placeholder = { Text("子分类名称") },
+                                            modifier = Modifier.weight(1f), singleLine = true,
+                                            shape = RoundedCornerShape(8.dp),
+                                            textStyle = MaterialTheme.typography.bodySmall
+                                        )
+                                        TextButton(onClick = {
+                                            if (newSubName.isNotBlank()) {
+                                                DataManager.addSubCategory(cat.id, newSubName.trim())
+                                                newSubName = ""
+                                                showAddSub = null
+                                            }
+                                        }) { Text("添加", fontSize = 12.sp) }
+                                        TextButton(onClick = { showAddSub = null; newSubName = "" }) {
+                                            Text("取消", fontSize = 12.sp)
+                                        }
+                                    }
+                                } else {
+                                    TextButton(
+                                        onClick = { showAddSub = cat.id },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(4.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, null, Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("添加子分类", fontSize = 12.sp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+
             if (showAdd) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -1086,9 +1199,39 @@ private fun CategorySheet(
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
+    // Edit sub-category dialog
+    editingSub?.let { (catId, sub) ->
+        AlertDialog(
+            onDismissRequest = { editingSub = null },
+            title = { Text("编辑子分类", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = editSubName, onValueChange = { editSubName = it },
+                    label = { Text("名称") }, singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editSubName.isNotBlank()) {
+                            DataManager.updateCategory(catId) {
+                                val updatedChildren = children.map {
+                                    if (it.id == sub.id) it.copy(name = editSubName.trim()) else it
+                                }
+                                copy(children = updatedChildren)
+                            }
+                            editingSub = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
+                ) { Text("保存", color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { editingSub = null }) { Text("取消") } }
+        )
+    }
+}@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WebDavConfigSheet(
     currentConfig: WebDavManager.WebDavConfig?,
@@ -1203,6 +1346,7 @@ private fun WebDavConfigSheet(
                     onClick = {
                         if (url.isNotBlank()) {
                             onSave(WebDavManager.WebDavConfig(url.trim(), username, password, dataPath.trim()))
+                            onDismiss()
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -1434,6 +1578,7 @@ private fun CloudStorageConfigSheet(
                                 smbShare = smbShare.trim(), smbDomain = smbDomain.trim(),
                                 ftpPath = ftpPath.trim()
                             ))
+                            onDismiss()
                         }
                     },
                     modifier = Modifier.weight(1f),

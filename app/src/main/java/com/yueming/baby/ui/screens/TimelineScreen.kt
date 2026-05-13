@@ -1,6 +1,7 @@
 package com.yueming.baby.ui.screens
 
 import android.app.TimePickerDialog
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -53,6 +54,7 @@ fun TimelineScreen() {
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimelineRecord?>(null) }
     var playVideoPath by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     val filtered = remember(timeline, activeCategory) {
         if (activeCategory == "all") timeline
@@ -255,6 +257,10 @@ fun TimelineScreen() {
         ) {
             ExtendedFloatingActionButton(
                 onClick = {
+                    if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
+                        Toast.makeText(context, "请先在首页添加宝宝信息", Toast.LENGTH_SHORT).show()
+                        return@ExtendedFloatingActionButton
+                    }
                     editingRecord = null
                     showAddDialog = true
                 },
@@ -324,6 +330,7 @@ private fun AddRecordDialog(
     var title by remember { mutableStateOf(initialData?.title ?: "") }
     var description by remember { mutableStateOf(initialData?.description ?: "") }
     var category by remember { mutableStateOf(initialData?.category ?: "milestone") }
+    var subCategory by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
     var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
     var selectedVideos by remember { mutableStateOf(initialData?.videos ?: emptyList()) }
@@ -331,6 +338,11 @@ private fun AddRecordDialog(
     var showDatePicker by remember { mutableStateOf(false) }
 
     val allCategories = DataManager.allCategories
+    val selectedCatConfig = allCategories.find { it.id == category }
+    val hasSubCategories = (selectedCatConfig?.children?.isNotEmpty() == true)
+
+    // Reset subCategory when category changes
+    LaunchedEffect(category) { subCategory = "" }
 
     val defaultTags = remember(category) {
         when (category) {
@@ -362,58 +374,82 @@ private fun AddRecordDialog(
         }
     }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(if (initialData != null) "编辑记录" else "添加新记录", fontWeight = FontWeight.Bold)
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showDatePicker = true },
-                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(date, fontSize = 12.sp)
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            val parts = timeStr.split(":")
-                            val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
-                            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                            TimePickerDialog(context, { _, hour, minute ->
-                                timeStr = "%02d:%02d".format(hour, minute)
-                            }, h, m, true).show()
-                        },
-                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Schedule, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(timeStr, fontSize = 12.sp)
-                    }
+                Text(if (initialData != null) "编辑记录" else "新纪录",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, null)
                 }
+            }
 
-                OutlinedTextField(
-                    value = title, onValueChange = { title = it },
-                    label = { Text("标题（如：第一次翻身）") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp)
-                )
+            // Title
+            OutlinedTextField(
+                value = title, onValueChange = { title = it },
+                label = { Text("标题") },
+                placeholder = { Text("如：第一次翻身") },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
 
-                OutlinedTextField(
-                    value = description, onValueChange = { description = it },
-                    label = { Text("记录下这个珍贵时刻...") },
-                    modifier = Modifier.fillMaxWidth(), minLines = 3, shape = RoundedCornerShape(12.dp)
-                )
+            // Description
+            OutlinedTextField(
+                value = description, onValueChange = { description = it },
+                label = { Text("描述") },
+                placeholder = { Text("记录下这个珍贵时刻...") },
+                modifier = Modifier.fillMaxWidth(), minLines = 3,
+                shape = RoundedCornerShape(12.dp)
+            )
 
-                Text("分类", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            // Date & Time row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.CalendarToday, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(date, fontSize = 13.sp)
+                }
+                OutlinedButton(
+                    onClick = {
+                        val parts = timeStr.split(":")
+                        val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
+                        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                        TimePickerDialog(context, { _, hour, minute ->
+                            timeStr = "%02d:%02d".format(hour, minute)
+                        }, h, m, true).show()
+                    },
+                    modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Schedule, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(timeStr, fontSize = 13.sp)
+                }
+            }
+
+            // Category
+            Column {
+                Text("分类", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -432,25 +468,50 @@ private fun AddRecordDialog(
                     }
                 }
 
-                Text("照片 (${selectedPhotos.size}/4)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    selectedPhotos.forEach { uri ->
-                        Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
-                            AsyncImage(model = uri, contentDescription = null,
-                                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            IconButton(
-                                onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
-                                modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
-                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            ) {
-                                Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
-                            }
+                // Sub-category selector
+                if (hasSubCategories) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("子分类", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Spacer(Modifier.height(4.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        selectedCatConfig?.children?.forEach { sub ->
+                            FilterChip(
+                                selected = subCategory == sub.id,
+                                onClick = { subCategory = sub.id },
+                                label = { Text(sub.name, fontSize = 11.sp) }
+                            )
                         }
                     }
-                    if (selectedPhotos.size < 4) {
+                }
+            }
+
+            // Photos section
+            Text("照片 (${selectedPhotos.size}/4)",
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(selectedPhotos.size) { index ->
+                    val uri = selectedPhotos[index]
+                    Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
+                        AsyncImage(model = uri, contentDescription = null,
+                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        IconButton(
+                            onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
+                            modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
+                        }
+                    }
+                }
+                if (selectedPhotos.size < 4) {
+                    item {
                         OutlinedButton(
                             onClick = { imagePicker.launch("image/*") },
                             modifier = Modifier.size(72.dp),
@@ -460,29 +521,34 @@ private fun AddRecordDialog(
                         }
                     }
                 }
+            }
 
-                Text("视频 (${selectedVideos.size}/3)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    selectedVideos.forEach { path ->
-                        Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
-                            VideoThumbnail(
-                                filePath = path,
-                                modifier = Modifier.fillMaxSize(),
-                                onClick = { videoPreviewPath = path }
-                            )
-                            IconButton(
-                                onClick = { selectedVideos = selectedVideos.filter { it != path } },
-                                modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
-                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            ) {
-                                Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
-                            }
+            // Videos section
+            Text("视频 (${selectedVideos.size}/3)",
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(selectedVideos.size) { index ->
+                    val path = selectedVideos[index]
+                    Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
+                        VideoThumbnail(
+                            filePath = path,
+                            modifier = Modifier.fillMaxSize(),
+                            onClick = { videoPreviewPath = path }
+                        )
+                        IconButton(
+                            onClick = { selectedVideos = selectedVideos.filter { it != path } },
+                            modifier = Modifier.align(Alignment.TopEnd).size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(Icons.Default.Close, null, Modifier.size(12.dp), tint = Color.White)
                         }
                     }
-                    if (selectedVideos.size < 3) {
+                }
+                if (selectedVideos.size < 3) {
+                    item {
                         OutlinedButton(
                             onClick = { videoPicker.launch("video/*") },
                             modifier = Modifier.size(72.dp),
@@ -492,48 +558,66 @@ private fun AddRecordDialog(
                         }
                     }
                 }
+            }
 
-                if (tags.isNotEmpty()) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        tags.forEach { tag ->
-                            InputChip(selected = true, onClick = { tags = tags.filter { it != tag } },
-                                label = { Text(tag, fontSize = 11.sp) },
-                                trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(14.dp)) })
-                        }
+            // Tags
+            if (tags.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    tags.forEach { tag ->
+                        InputChip(
+                            selected = true, onClick = { tags = tags.filter { it != tag } },
+                            label = { Text(tag, fontSize = 11.sp) },
+                            trailingIcon = { Icon(Icons.Default.Close, null, Modifier.size(14.dp)) }
+                        )
                     }
                 }
-                if (defaultTags.isNotEmpty()) {
-                    val suggested = defaultTags.filter { it !in tags }.take(5)
-                    if (suggested.isNotEmpty()) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            suggested.forEach { tag ->
-                                AssistChip(onClick = { tags = tags + tag },
-                                    label = { Text("+$tag", fontSize = 10.sp) })
-                            }
+            }
+            if (defaultTags.isNotEmpty()) {
+                val suggested = defaultTags.filter { it !in tags }.take(5)
+                if (suggested.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        suggested.forEach { tag ->
+                            AssistChip(
+                                onClick = { tags = tags + tag },
+                                label = { Text("+$tag", fontSize = 10.sp) }
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            // Save button
+            Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
                     if (title.isNotBlank()) {
+                        val catLabel = if (subCategory.isNotEmpty() && hasSubCategories) {
+                            val sub = selectedCatConfig?.children?.find { it.id == subCategory }
+                            if (sub != null) "$category|${sub.name}" else category
+                        } else category
                         onSave(TimelineRecord(
                             id = initialData?.id ?: "record-${UUID.randomUUID().toString().take(8)}",
                             date = date, title = title.trim(), description = description.trim(),
-                            category = category, tags = tags, photos = selectedPhotos, videos = selectedVideos
+                            category = catLabel, tags = tags, photos = selectedPhotos, videos = selectedVideos
                         ))
                     }
                 },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(16.dp),
+                enabled = title.isNotBlank()
             ) {
-                Text(if (initialData != null) "保存修改" else "添加记录", color = Color.White)
+                Text(if (initialData != null) "保存修改" else "保存记录", color = Color.White,
+                    fontSize = 16.sp, fontWeight = FontWeight.Medium)
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
+        }
+    }
 
     if (showDatePicker) {
         YueMingTimelineDatePicker(

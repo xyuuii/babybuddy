@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.util.UUID
 
 object DataManager {
     private var appContext: Context? = null
@@ -509,6 +510,24 @@ object DataManager {
     fun removeCategory(id: String) {
         _customCategories.value = _customCategories.value.filter { it.id != id }.toMutableList()
         saveSettings()
+    }
+
+    fun updateCategory(categoryId: String, updates: CategoryConfig.() -> CategoryConfig) {
+        val updated = _customCategories.value.map {
+            if (it.id == categoryId) it.updates() else it
+        }.toMutableList()
+        _customCategories.value = updated
+        saveSettings()
+    }
+
+    fun addSubCategory(categoryId: String, name: String) {
+        val cat = _customCategories.value.find { it.id == categoryId } ?: return
+        val sub = CategoryConfig.SubCategory(
+            id = "sub-${UUID.randomUUID().toString().take(8)}",
+            name = name
+        )
+        val updated = cat.copy(children = cat.children + sub)
+        updateCategory(categoryId) { updated }
     }
 
     // --- AI Config ---

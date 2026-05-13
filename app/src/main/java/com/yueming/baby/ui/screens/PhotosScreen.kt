@@ -1,5 +1,6 @@
 package com.yueming.baby.ui.screens
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -50,14 +52,17 @@ fun PhotosScreen() {
     val photos by DataManager.photos.collectAsState()
     var showUpload by remember { mutableStateOf(false) }
     var photoCaption by remember { mutableStateOf("") }
-    var photoUrl by remember { mutableStateOf("") }
-    var showUrlInput by remember { mutableStateOf(false) }
     var lightboxPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
     var selectedVideoPath by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
+        if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
+            Toast.makeText(context, "请先在首页添加宝宝信息", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
         if (uri != null) {
             val localPath = DataManager.copyPhotoToInternalStorage(uri)
             DataManager.addPhoto(PhotoEntry(
@@ -75,6 +80,10 @@ fun PhotosScreen() {
     val videoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
+        if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
+            Toast.makeText(context, "请先在首页添加宝宝信息", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
         if (uri != null) {
             val localPath = DataManager.copyVideoToInternalStorage(uri)
             selectedVideoPath = localPath ?: uri.toString()
@@ -152,7 +161,7 @@ fun PhotosScreen() {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
-                        Text("添加照片", fontWeight = FontWeight.Medium)
+                        Text("添加照片/视频", fontWeight = FontWeight.Medium)
                         IconButton(onClick = { showUpload = false }) {
                             Icon(Icons.Default.Close, null)
                         }
@@ -168,49 +177,17 @@ fun PhotosScreen() {
                             onClick = { photoPicker.launch("image/*") },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.PhotoLibrary, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("添加照片", fontSize = 12.sp)
+                            Icon(Icons.Default.PhotoLibrary, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("照片", fontSize = 14.sp)
                         }
                         OutlinedButton(
                             onClick = { videoPicker.launch("video/*") },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.Videocam, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("添加视频", fontSize = 12.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { showUrlInput = !showUrlInput },
-                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(if (showUrlInput) "收起" else "图片链接", fontSize = 12.sp)
-                        }
-                    }
-                    if (showUrlInput) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = photoUrl, onValueChange = { photoUrl = it },
-                                label = { Text("图片URL") }, modifier = Modifier.weight(1f),
-                                singleLine = true, shape = RoundedCornerShape(12.dp)
-                            )
-                            Button(
-                                onClick = {
-                                    val url = photoUrl.trim()
-                                    if (url.isNotEmpty()) {
-                                        DataManager.addPhoto(PhotoEntry(
-                                            id = "photo-${UUID.randomUUID().toString().take(8)}",
-                                            url = url, caption = photoCaption.ifBlank { "照片" },
-                                            date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-                                            tags = emptyList()
-                                        ))
-                                        photoUrl = ""; photoCaption = ""; showUrlInput = false; showUpload = false
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) { Text("添加", color = Color.White) }
+                            Icon(Icons.Default.Videocam, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("视频", fontSize = 14.sp)
                         }
                     }
                 }
