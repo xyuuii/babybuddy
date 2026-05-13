@@ -113,8 +113,9 @@ object DataManager {
         val wd = _webDavConfig.value
         if (wd != null) return wd
         val cs = _cloudStorageConfig.value
+        val hostUrl = if (cs.host.startsWith("http")) cs.host else "http://${cs.host}"
         return WebDavManager.WebDavConfig(
-            url = "${cs.host}:${cs.port}",
+            url = "$hostUrl:${cs.port}",
             username = cs.username,
             password = cs.password,
             dataPath = cs.webdavPath

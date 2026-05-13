@@ -10,6 +10,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -117,18 +123,27 @@ fun PhotosScreen() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!showUpload) {
-                Button(
-                    onClick = { showUpload = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                    shape = RoundedCornerShape(16.dp)
+                FloatingActionButton(
+                    onClick = { showUpload = !showUpload },
+                    containerColor = Color(0xFFEC407A),
+                    shape = CircleShape,
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Text("上传照片", color = Color.White)
+                    Icon(
+                        if (showUpload) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = "添加",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
 
-        if (showUpload) {
-            Spacer(Modifier.height(12.dp))
+        AnimatedVisibility(
+            visible = showUpload,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
             Card(
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),

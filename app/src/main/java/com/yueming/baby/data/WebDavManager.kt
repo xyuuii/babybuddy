@@ -56,17 +56,24 @@ object WebDavManager {
     private fun normalizeUrl(rawUrl: String): String {
         var url = rawUrl.trimEnd('/')
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "https://$url"
+            url = "http://$url"  // Default to HTTP for LAN/NAS
         }
         return url
     }
 
-    private fun createDirectory(config: WebDavConfig, dirUrl: String) {
+    private fun createDirectory(config: WebDavConfig, dirUrl: String): Boolean {
         try {
             val request = buildRequest(config, dirUrl, "MKCOL").build()
-            client.newCall(request).execute().close()
-        } catch (_: Exception) {
-            // Directory may already exist, ignore
+            val response = client.newCall(request).execute()
+            val code = response.code
+            response.close()
+            // 201=Created, 405=Already exists, 301/403=OK for some servers
+            val ok = code in listOf(201, 405, 301, 403, 200)
+            if (!ok) android.util.Log.w("WebDavManager", "MKCOL $dirUrl → $code")
+            return ok
+        } catch (e: Exception) {
+            android.util.Log.w("WebDavManager", "MKCOL error: $dirUrl → ${e.message}")
+            return false
         }
     }
 
@@ -150,10 +157,12 @@ object WebDavManager {
             var current = normalizeUrl(config.url)
             for (part in parts) {
                 current = "$current/$part".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
-                createDirectory(config, current)
+                val ok = createDirectory(config, current)
+                android.util.Log.d("WebDavManager", "createDirectoryChain: $current → $ok")
             }
             Result.success(true)
         } catch (e: Exception) {
+            android.util.Log.e("WebDavManager", "createDirectoryChain failed: ${e.message}")
             Result.failure(e)
         }
     }
