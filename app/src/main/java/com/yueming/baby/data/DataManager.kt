@@ -143,8 +143,8 @@ object DataManager {
                 gender = activeEntity.gender, avatar = activeEntity.avatarUri
             )
         } else {
-            _babies.value = listOf(sampleBaby)
-            _activeBaby.value = sampleBaby
+            _babies.value = emptyList()
+            _activeBaby.value = BabyInfo()
         }
 
         // Load data for active baby
@@ -725,8 +725,8 @@ object DataManager {
                 database.settingsDao().deleteAll()
                 _timeline.value = mutableListOf()
                 _photos.value = mutableListOf()
-                _babies.value = listOf(sampleBaby)
-                _activeBaby.value = sampleBaby
+                _babies.value = emptyList()
+                _activeBaby.value = BabyInfo()
                 _customCategories.value = emptyList()
                 _aiConfig.value = AIConfig()
                 _aiProfiles.value = emptyList()

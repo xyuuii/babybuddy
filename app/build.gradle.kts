@@ -67,6 +67,11 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Media3 ExoPlayer for video playback
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-common:1.5.0")
+
     // Room for persistent storage
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
@@ -75,6 +80,11 @@ dependencies {
 
     // OkHttp for WebDAV operations
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Media3 ExoPlayer for video playback
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
 
     // WorkManager for scheduled backup
     implementation("androidx.work:work-runtime-ktx:2.9.1")

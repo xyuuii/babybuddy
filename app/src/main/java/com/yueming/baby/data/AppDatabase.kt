@@ -9,9 +9,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.yueming.baby.data.dao.*
 import com.yueming.baby.data.entity.*
 import com.google.gson.Gson
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @Database(
     entities = [TimelineEntity::class, PhotoEntity::class, BabyEntity::class, SettingsEntity::class],
@@ -43,62 +40,8 @@ abstract class AppDatabase : RoomDatabase() {
                     "yueming.db"
                 )
                     .addMigrations(MIGRATION_2_3)
-                    .addCallback(PrepopulateCallback())
                     .build()
                     .also { INSTANCE = it }
-            }
-        }
-
-        private class PrepopulateCallback : Callback() {
-            override fun onCreate(db: SupportSQLiteDatabase) {
-                super.onCreate(db)
-                CoroutineScope(Dispatchers.IO).launch {
-                    INSTANCE?.let { database ->
-                        // Double check: both timeline and baby tables must be empty
-                        if (database.timelineDao().count() == 0 && database.babyDao().count() == 0) {
-                            // Insert sample baby using insertIfNotExists to avoid overwriting user data
-                            val baby = BabyEntity(
-                                name = sampleBaby.name,
-                                nickname = sampleBaby.nickname,
-                                birthDate = sampleBaby.birthDate,
-                                gender = sampleBaby.gender,
-                                avatarUri = sampleBaby.avatar
-                            )
-                            database.babyDao().insertIfNotExists(baby)
-                            val babyId = baby.id
-
-                            // Insert sample timeline
-                            val timelineEntities = sampleTimeline.map { record ->
-                                TimelineEntity(
-                                    id = record.id,
-                                    babyId = babyId,
-                                    date = record.date,
-                                    title = record.title,
-                                    description = record.description,
-                                    category = record.category,
-                                    tags = Gson().toJson(record.tags),
-                                    photos = Gson().toJson(record.photos),
-                                    videos = Gson().toJson(record.videos)
-                                )
-                            }
-                            database.timelineDao().insertAll(timelineEntities)
-
-                            // Insert sample photos
-                            val photoEntities = samplePhotos.map { photo ->
-                                PhotoEntity(
-                                    id = photo.id,
-                                    babyId = babyId,
-                                    url = photo.url,
-                                    caption = photo.caption,
-                                    date = photo.date,
-                                    timelineRecordId = photo.timelineRecordId,
-                                    tags = Gson().toJson(photo.tags)
-                                )
-                            }
-                            database.photoDao().insertAll(photoEntities)
-                        }
-                    }
-                }
             }
         }
     }

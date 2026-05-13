@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -250,7 +251,13 @@ fun PhotosScreen() {
                                     row.forEach { photo ->
                                         Card(
                                             modifier = Modifier.weight(1f).aspectRatio(1f)
-                                                .clickable { lightboxPhoto = photo },
+                                                .clickable {
+                                                    if (photo.tags.contains("视频")) {
+                                                        selectedVideoPath = photo.url
+                                                    } else {
+                                                        lightboxPhoto = photo
+                                                    }
+                                                },
                                             shape = RoundedCornerShape(16.dp),
                                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                         ) {
@@ -307,6 +314,19 @@ fun PhotosScreen() {
                         style = MaterialTheme.typography.bodySmall)
                 }
             }
+        }
+    }
+
+    // Video fullscreen player
+    selectedVideoPath?.let { path ->
+        Dialog(
+            onDismissRequest = { selectedVideoPath = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            VideoPlayer(
+                filePath = path,
+                onClose = { selectedVideoPath = null }
+            )
         }
     }
 }

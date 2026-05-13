@@ -33,9 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.LocalDate
 import java.util.UUID
@@ -104,6 +107,31 @@ fun DashboardScreen() {
         }
     }
 
+    if (babies.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.ChildCare, null, Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
+                Spacer(Modifier.height(16.dp))
+                Text("还没有添加宝宝",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(6.dp))
+                Text("记录宝宝的成长点滴，从添加第一个宝宝开始",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = { showAddBaby = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                    shape = RoundedCornerShape(16.dp)
+                ) { Text("添加宝宝", color = Color.White) }
+            }
+        }
+    } else {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -427,6 +455,7 @@ fun DashboardScreen() {
 
         item { Spacer(Modifier.height(8.dp)) }
     }
+    }
 
     // Add Baby Dialog
     if (showAddBaby) {
@@ -590,6 +619,7 @@ private fun GrowthEntrySheet(
     }
     var selectedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var videoPreviewPath by remember { mutableStateOf<String?>(null) }
     var showGrowthDatePicker by remember { mutableStateOf(false) }
 
     val growthPhotoPicker = rememberLauncherForActivityResult(
@@ -698,7 +728,8 @@ private fun GrowthEntrySheet(
                     ) {
                         VideoThumbnail(
                             filePath = path,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            onClick = { videoPreviewPath = path }
                         )
                         IconButton(
                             onClick = { selectedVideos = selectedVideos.filter { it != path } },
@@ -762,6 +793,18 @@ private fun GrowthEntrySheet(
             },
             onDismiss = { showGrowthDatePicker = false }
         )
+    }
+
+    videoPreviewPath?.let { path ->
+        Dialog(
+            onDismissRequest = { videoPreviewPath = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            VideoPlayer(
+                filePath = path,
+                onClose = { videoPreviewPath = null }
+            )
+        }
     }
 }
 
@@ -886,6 +929,7 @@ private fun MilestoneEntrySheet(
     }
     var selectedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var videoPreviewPath by remember { mutableStateOf<String?>(null) }
     var showMilestoneDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -991,7 +1035,8 @@ private fun MilestoneEntrySheet(
                     ) {
                         VideoThumbnail(
                             filePath = path,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            onClick = { videoPreviewPath = path }
                         )
                         IconButton(
                             onClick = { selectedVideos = selectedVideos.filter { it != path } },
@@ -1044,6 +1089,18 @@ private fun MilestoneEntrySheet(
             },
             onDismiss = { showMilestoneDatePicker = false }
         )
+    }
+
+    videoPreviewPath?.let { path ->
+        Dialog(
+            onDismissRequest = { videoPreviewPath = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            VideoPlayer(
+                filePath = path,
+                onClose = { videoPreviewPath = null }
+            )
+        }
     }
 }
 

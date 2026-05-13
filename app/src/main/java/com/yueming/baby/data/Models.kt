@@ -6,10 +6,10 @@ enum class ThemeMode { LIGHT, DARK, SYSTEM }
 
 data class BabyInfo(
     val id: String = "",
-    val name: String = "小月亮",
-    val nickname: String = "月月",
-    val birthDate: String = "2025-01-15",
-    val gender: String = "girl",
+    val name: String = "",
+    val nickname: String = "",
+    val birthDate: String = "",
+    val gender: String = "",
     val avatar: String? = null
 )
 

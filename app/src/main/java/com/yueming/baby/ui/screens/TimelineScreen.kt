@@ -29,8 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.Instant
 import java.time.LocalDate
@@ -49,6 +52,7 @@ fun TimelineScreen() {
     var activeCategory by remember { mutableStateOf("all") }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimelineRecord?>(null) }
+    var playVideoPath by remember { mutableStateOf<String?>(null) }
 
     val filtered = remember(timeline, activeCategory) {
         if (activeCategory == "all") timeline
@@ -205,7 +209,7 @@ fun TimelineScreen() {
                                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 record.videos.take(3).forEach { path ->
                                                     Card(
-                                                        modifier = Modifier.size(52.dp),
+                                                        modifier = Modifier.size(52.dp).clickable { playVideoPath = path },
                                                         shape = RoundedCornerShape(10.dp),
                                                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                                                     ) {
@@ -283,6 +287,19 @@ fun TimelineScreen() {
                 }
             )
         }
+
+        // Video Player Dialog
+        playVideoPath?.let { path ->
+            Dialog(
+                onDismissRequest = { playVideoPath = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                VideoPlayer(
+                    filePath = path,
+                    onClose = { playVideoPath = null }
+                )
+            }
+        }
     }
 }
 
@@ -310,6 +327,7 @@ private fun AddRecordDialog(
     var tags by remember { mutableStateOf(initialData?.tags ?: emptyList()) }
     var selectedPhotos by remember { mutableStateOf(initialData?.photos ?: emptyList()) }
     var selectedVideos by remember { mutableStateOf(initialData?.videos ?: emptyList()) }
+    var videoPreviewPath by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     val allCategories = DataManager.allCategories
@@ -452,7 +470,8 @@ private fun AddRecordDialog(
                         Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
                             VideoThumbnail(
                                 filePath = path,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                onClick = { videoPreviewPath = path }
                             )
                             IconButton(
                                 onClick = { selectedVideos = selectedVideos.filter { it != path } },
@@ -524,6 +543,18 @@ private fun AddRecordDialog(
             },
             onDismiss = { showDatePicker = false }
         )
+    }
+
+    videoPreviewPath?.let { path ->
+        Dialog(
+            onDismissRequest = { videoPreviewPath = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            VideoPlayer(
+                filePath = path,
+                onClose = { videoPreviewPath = null }
+            )
+        }
     }
 }
 
