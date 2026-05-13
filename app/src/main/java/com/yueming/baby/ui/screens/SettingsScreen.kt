@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.data.cloud.CloudStorageConfig
+import com.yueming.baby.data.cloud.CloudManager
+import com.yueming.baby.data.cloud.StorageProtocol
+import com.yueming.baby.data.cloud.PostgresManager
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -46,6 +52,7 @@ fun SettingsScreen() {
     val customCategories by DataManager.customCategories.collectAsState()
     val themeMode by DataManager.themeMode.collectAsState()
     val webDavConfig by DataManager.webDavConfig.collectAsState()
+    val cloudStorageConfig by DataManager.cloudStorageConfig.collectAsState()
     val isBackingUp by DataManager.isBackingUp.collectAsState()
     val allCategories = DataManager.allCategories
 
@@ -56,6 +63,8 @@ fun SettingsScreen() {
     var showAddBabySheet by remember { mutableStateOf(false) }
     var showWebDavSheet by remember { mutableStateOf(false) }
     var showRestoreSheet by remember { mutableStateOf(false) }
+    var showCloudStorageSheet by remember { mutableStateOf(false) }
+    var showDatabaseSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -89,6 +98,60 @@ fun SettingsScreen() {
                 subtitle = if (aiConfig.apiKey.isNotEmpty()) "已配置 · ${aiConfig.model}" else "点击配置",
                 onClick = { showAISheet = true }
             )
+        }
+
+        // ---- Cloud Storage Config Group ----
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { showCloudStorageSheet = true },
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Row(
+                    Modifier.padding(20.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CloudQueue, null, Modifier.size(20.dp), tint = Color(0xFF42A5F5))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("存储配置", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "${cloudStorageConfig.protocol.name} · ${cloudStorageConfig.host}:${cloudStorageConfig.port}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                }
+            }
+        }
+
+        // ---- Database Config Group ----
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { showDatabaseSheet = true },
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Row(
+                    Modifier.padding(20.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Dns, null, Modifier.size(20.dp), tint = Color(0xFFAB47BC))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("数据库配置", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text("PostgreSQL",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                }
+            }
         }
 
         // ---- Backup & Sync Group ----
@@ -363,6 +426,22 @@ fun SettingsScreen() {
             onDismiss = { showWebDavSheet = false },
             onSave = { config -> DataManager.saveWebDavConfig(config) },
             onClear = { DataManager.clearWebDavConfig() }
+        )
+    }
+
+    // Cloud Storage Config Sheet
+    if (showCloudStorageSheet) {
+        CloudStorageConfigSheet(
+            currentConfig = cloudStorageConfig,
+            onDismiss = { showCloudStorageSheet = false },
+            onSave = { config -> DataManager.saveCloudStorageConfig(config) }
+        )
+    }
+
+    // Database Config Sheet
+    if (showDatabaseSheet) {
+        DatabaseConfigSheet(
+            onDismiss = { showDatabaseSheet = false }
         )
     }
 
@@ -658,129 +737,177 @@ private fun AIConfigSheet(
     onSetActive: (String) -> Unit,
     onTestConnection: (AIProfile, (Result<Boolean>) -> Unit) -> Unit
 ) {
-    var editingProfile by remember { mutableStateOf<AIProfile?>(null) }
+    var selectedProfileId by remember { mutableStateOf<String?>(profiles.firstOrNull()?.id) }
     var showAddForm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
+    var isEditing by remember { mutableStateOf(false) }
+
+    val selectedProfile = profiles.find { it.id == selectedProfileId }
+    val displayProfiles = profiles
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
-        if (editingProfile != null) {
-            // Profile edit mode
-            AIProfileEditForm(
-                profile = editingProfile!!,
-                isNew = showAddForm,
-                onSave = {
-                    if (showAddForm) onAddProfile(it) else onSaveProfile(it)
-                    editingProfile = null
-                    showAddForm = false
-                },
-                onCancel = { editingProfile = null; showAddForm = false },
-                onTestConnection = onTestConnection
-            )
-        } else {
-            // Profile list mode
-            Column(
-                modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("AI 配置文件管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("AI 配置文件管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-                if (profiles.isEmpty()) {
-                    Text("尚未配置 AI 配置文件",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp))
+            // --- Top Area: Profile List (LazyRow) ---
+            if (displayProfiles.isEmpty() && !showAddForm) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                ) {
+                    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("尚未配置 AI 配置文件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-
-                profiles.forEach { profile ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (profile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                            else MaterialTheme.colorScheme.surfaceContainer
+            } else if (!isEditing) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(displayProfiles.size) { index ->
+                        val profile = displayProfiles[index]
+                        val isSelected = profile.id == selectedProfileId
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                selectedProfileId = profile.id
+                                showAddForm = false
+                            },
+                            label = {
+                                Text(
+                                    profile.name,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                            },
+                            leadingIcon = if (profile.isActive) {
+                                { Icon(Icons.Default.CheckCircle, null, Modifier.size(14.dp), tint = Color(0xFF4CAF50)) }
+                            } else null
                         )
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(profile.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold)
-                                        if (profile.isActive) {
-                                            Spacer(Modifier.width(6.dp))
-                                            Box(
-                                                Modifier.clip(RoundedCornerShape(6.dp))
-                                                    .background(MaterialTheme.colorScheme.primary)
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text("活跃", fontSize = 10.sp, color = Color.White)
-                                            }
+                    }
+                    item {
+                        FilterChip(
+                            selected = showAddForm,
+                            onClick = {
+                                selectedProfileId = null
+                                showAddForm = true
+                                isEditing = true
+                            },
+                            label = { Text("+ 添加", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF7C4DFF).copy(alpha = 0.15f)
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // --- Bottom Area: Edit Form (ScrollableColumn) ---
+            if (showAddForm || (selectedProfile != null && isEditing)) {
+                val editProfile = if (showAddForm) {
+                    AIProfile(
+                        apiBaseUrl = "https://api.deepseek.com",
+                        model = "deepseek-chat",
+                        isActive = profiles.isEmpty()
+                    )
+                } else selectedProfile!!
+
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AIProfileEditFormRedesigned(
+                        profile = editProfile,
+                        isNew = showAddForm,
+                        onSave = {
+                            if (showAddForm) onAddProfile(it) else onSaveProfile(it)
+                            showAddForm = false
+                            isEditing = false
+                            selectedProfileId = it.id
+                        },
+                        onCancel = { showAddForm = false; isEditing = false },
+                        onTestConnection = onTestConnection
+                    )
+                }
+            } else if (selectedProfile != null) {
+                // Show selected profile info with action buttons
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selectedProfile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        else MaterialTheme.colorScheme.surfaceContainer
+                    )
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(selectedProfile.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold)
+                                    if (selectedProfile.isActive) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Box(
+                                            Modifier.clip(RoundedCornerShape(6.dp))
+                                                .background(MaterialTheme.colorScheme.primary)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text("活跃", fontSize = 10.sp, color = Color.White)
                                         }
                                     }
-                                    Spacer(Modifier.height(2.dp))
-                                    Text("${profile.model} · ${profile.apiBaseUrl}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
+                                Spacer(Modifier.height(2.dp))
+                                Text("${selectedProfile.model} · ${selectedProfile.apiBaseUrl}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             }
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                if (!profile.isActive) {
-                                    OutlinedButton(
-                                        onClick = { onSetActive(profile.id) },
-                                        modifier = Modifier.height(32.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) { Text("启用", fontSize = 11.sp) }
-                                }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (!selectedProfile.isActive) {
                                 OutlinedButton(
-                                    onClick = { editingProfile = profile },
+                                    onClick = { onSetActive(selectedProfile.id) },
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                     shape = RoundedCornerShape(8.dp)
-                                ) { Text("编辑", fontSize = 11.sp) }
-                                OutlinedButton(
-                                    onClick = { showDeleteConfirm = profile.id },
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
-                                ) { Text("删除", fontSize = 11.sp) }
+                                ) { Text("启用", fontSize = 11.sp) }
                             }
+                            OutlinedButton(
+                                onClick = { isEditing = true },
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) { Text("编辑", fontSize = 11.sp) }
+                            OutlinedButton(
+                                onClick = { showDeleteConfirm = selectedProfile.id },
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
+                            ) { Text("删除", fontSize = 11.sp) }
                         }
                     }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        editingProfile = AIProfile(
-                            apiBaseUrl = "https://api.deepseek.com",
-                            model = "deepseek-chat",
-                            isActive = profiles.isEmpty()
-                        )
-                        showAddForm = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("添加配置", color = Color.White)
                 }
             }
         }
@@ -809,7 +936,7 @@ private fun AIConfigSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AIProfileEditForm(
+private fun AIProfileEditFormRedesigned(
     profile: AIProfile,
     isNew: Boolean,
     onSave: (AIProfile) -> Unit,
@@ -821,10 +948,6 @@ private fun AIProfileEditForm(
     var testResult by remember { mutableStateOf<String?>(null) }
 
     Column(
-        modifier = Modifier
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 32.dp)
-            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
@@ -834,109 +957,122 @@ private fun AIProfileEditForm(
         ) {
             Text(
                 if (isNew) "新建配置" else "编辑配置",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold
             )
             TextButton(onClick = onCancel) { Text("返回") }
         }
 
-        OutlinedTextField(
-            value = form.name, onValueChange = { form = form.copy(name = it) },
-            label = { Text("配置名称") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
-        OutlinedTextField(
-            value = form.apiBaseUrl, onValueChange = { form = form.copy(apiBaseUrl = it) },
-            label = { Text("API Base URL") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
-        OutlinedTextField(
-            value = form.apiKey, onValueChange = { form = form.copy(apiKey = it) },
-            label = { Text("API Key") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
+        // Card Group 1: Basic Info (Name / URL / Key)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("基本信息", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                OutlinedTextField(
+                    value = form.name, onValueChange = { form = form.copy(name = it) },
+                    label = { Text("配置名称") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = form.apiBaseUrl, onValueChange = { form = form.copy(apiBaseUrl = it) },
+                    label = { Text("API Base URL") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
+                    value = form.apiKey, onValueChange = { form = form.copy(apiKey = it) },
+                    label = { Text("API Key") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        }
 
-        Text("模型选择", fontWeight = FontWeight.Medium)
-        AI_MODELS.forEach { model ->
-            Row(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { form = form.copy(model = model.id, apiBaseUrl = model.apiBase) }
-                    .background(if (form.model == model.id) Color(0xFFEC407A).copy(alpha = 0.1f) else Color.Transparent)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(model.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    Text(model.provider, style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Card Group 2: Model Params (Model / Temperature / Tokens)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("模型参数", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+
+                Text("模型选择", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                AI_MODELS.forEach { model ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { form = form.copy(model = model.id, apiBaseUrl = model.apiBase) }
+                            .background(if (form.model == model.id) Color(0xFFEC407A).copy(alpha = 0.1f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(model.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            Text(model.provider, style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (form.model == model.id) {
+                            Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = Color(0xFFEC407A))
+                        }
+                    }
                 }
-                if (form.model == model.id) {
-                    Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = Color(0xFFEC407A))
+
+                Column {
+                    Text("温度: %.1f".format(form.temperature),
+                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Slider(
+                        value = form.temperature, onValueChange = { form = form.copy(temperature = it) },
+                        valueRange = 0f..2f, steps = 19,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("最大 Token 数: ${form.maxTokens}",
+                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    OutlinedButton(
+                        onClick = {
+                            val options = listOf(512, 1024, 2048, 4096, 8192)
+                            val idx = options.indexOf(form.maxTokens)
+                            val nextIdx = (idx + 1) % options.size
+                            form = form.copy(maxTokens = options[nextIdx])
+                        },
+                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text("切换", fontSize = 11.sp) }
                 }
             }
         }
 
-        OutlinedTextField(
-            value = form.systemPrompt, onValueChange = { form = form.copy(systemPrompt = it) },
-            label = { Text("系统提示词") },
-            modifier = Modifier.fillMaxWidth(), minLines = 2,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Column {
-            Text("温度: %.1f".format(form.temperature),
-                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-            Text("0=精确严谨，1=平衡，2=创意发散。育儿建议推荐0.7-1.0",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-            Slider(
-                value = form.temperature, onValueChange = { form = form.copy(temperature = it) },
-                valueRange = 0f..2f,
-                steps = 19,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Column {
-            Text("Top-P: %.2f".format(form.topP),
-                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-            Text("核采样概率，通常与温度二选一调整",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-            Slider(
-                value = form.topP, onValueChange = { form = form.copy(topP = it) },
-                valueRange = 0f..1f,
-                steps = 19,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Card Group 3: Advanced (System Prompt)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
-            Text("最大 Token 数: ${form.maxTokens}",
-                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-            OutlinedButton(
-                onClick = {
-                    val options = listOf(512, 1024, 2048, 4096, 8192)
-                    val idx = options.indexOf(form.maxTokens)
-                    val nextIdx = (idx + 1) % options.size
-                    form = form.copy(maxTokens = options[nextIdx])
-                },
-                modifier = Modifier.height(28.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(8.dp)
-            ) { Text("切换", fontSize = 11.sp) }
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("高级设置", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                OutlinedTextField(
+                    value = form.systemPrompt, onValueChange = { form = form.copy(systemPrompt = it) },
+                    label = { Text("系统提示词") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 2,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
         }
-        Text("单次回复的最大字数。2048≈1500汉字，4096≈3000汉字。值越大回复越长，但响应更慢。",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
 
         testResult?.let {
             Text(it, style = MaterialTheme.typography.labelSmall,
@@ -1301,6 +1437,369 @@ private fun RestoreSheet(
                             tint = MaterialTheme.colorScheme.primary)
                     }
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CloudStorageConfigSheet(
+    currentConfig: CloudStorageConfig,
+    onDismiss: () -> Unit,
+    onSave: (CloudStorageConfig) -> Unit
+) {
+    var protocol by remember { mutableStateOf(currentConfig.protocol) }
+    var host by remember { mutableStateOf(currentConfig.host) }
+    var port by remember { mutableStateOf(currentConfig.port.toString()) }
+    var username by remember { mutableStateOf(currentConfig.username) }
+    var password by remember { mutableStateOf(currentConfig.password) }
+    var webdavPath by remember { mutableStateOf(currentConfig.webdavPath) }
+    var smbShare by remember { mutableStateOf(currentConfig.smbShare) }
+    var smbDomain by remember { mutableStateOf(currentConfig.smbDomain) }
+    var ftpPath by remember { mutableStateOf(currentConfig.ftpPath) }
+    var showPassword by remember { mutableStateOf(false) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("存储配置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            // Protocol selector
+            Text("存储协议", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StorageProtocol.entries.forEach { proto ->
+                    FilterChip(
+                        selected = protocol == proto,
+                        onClick = { protocol = proto },
+                        label = { Text(proto.name, fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Common fields
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("连接信息", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary)
+
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = host, onValueChange = { host = it },
+                            label = { Text("主机") },
+                            modifier = Modifier.weight(2f), singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        OutlinedTextField(
+                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() } },
+                            label = { Text("端口") },
+                            modifier = Modifier.weight(1f), singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                    OutlinedTextField(
+                        value = username, onValueChange = { username = it },
+                        label = { Text("用户名") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it },
+                        label = { Text("密码") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // Protocol-specific fields
+            when (protocol) {
+                StorageProtocol.WEBDAV -> {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text("WebDAV 路径", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = webdavPath, onValueChange = { webdavPath = it },
+                                label = { Text("存储路径") },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+                StorageProtocol.SMB -> {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("SMB 共享", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary)
+                            OutlinedTextField(
+                                value = smbShare, onValueChange = { smbShare = it },
+                                label = { Text("共享名") },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            OutlinedTextField(
+                                value = smbDomain, onValueChange = { smbDomain = it },
+                                label = { Text("域名（可选）") },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+                StorageProtocol.FTP -> {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text("FTP 路径", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = ftpPath, onValueChange = { ftpPath = it },
+                                label = { Text("远程路径") },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            testResult?.let {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val success = it.contains("成功") || it.contains("通过")
+                    Icon(
+                        if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                        null, Modifier.size(16.dp),
+                        tint = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, style = MaterialTheme.typography.labelSmall,
+                        color = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350))
+                }
+            }
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        if (host.isNotBlank()) {
+                            isTesting = true
+                            testResult = null
+                            val config = CloudStorageConfig(
+                                protocol = protocol, host = host.trim(),
+                                port = port.toIntOrNull() ?: 5005, username = username,
+                                password = password, webdavPath = webdavPath.trim(),
+                                smbShare = smbShare.trim(), smbDomain = smbDomain.trim(),
+                                ftpPath = ftpPath.trim()
+                            )
+                            scope.launch {
+                                val result = CloudManager.testConnection(config)
+                                isTesting = false
+                                testResult = result.fold(
+                                    onSuccess = { "连接成功" },
+                                    onFailure = { "连接失败: ${it.message}" }
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isTesting,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
+                    Text("测试连接", fontSize = 13.sp)
+                }
+                Button(
+                    onClick = {
+                        if (host.isNotBlank()) {
+                            onSave(CloudStorageConfig(
+                                protocol = protocol, host = host.trim(),
+                                port = port.toIntOrNull() ?: 5005, username = username,
+                                password = password, webdavPath = webdavPath.trim(),
+                                smbShare = smbShare.trim(), smbDomain = smbDomain.trim(),
+                                ftpPath = ftpPath.trim()
+                            ))
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF42A5F5)),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("保存", color = Color.White) }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatabaseConfigSheet(
+    onDismiss: () -> Unit
+) {
+    var host by remember { mutableStateOf("192.168.0.28") }
+    var port by remember { mutableStateOf("15432") }
+    var database by remember { mutableStateOf("maindb") }
+    var username by remember { mutableStateOf("dbadmin") }
+    var password by remember { mutableStateOf("Db@Admin#2026!Pg") }
+    var schema by remember { mutableStateOf("yueming") }
+    var showPassword by remember { mutableStateOf(false) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("数据库配置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("PostgreSQL 连接", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary)
+
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = host, onValueChange = { host = it },
+                            label = { Text("主机") },
+                            modifier = Modifier.weight(2f), singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        OutlinedTextField(
+                            value = port, onValueChange = { port = it.filter { c -> c.isDigit() } },
+                            label = { Text("端口") },
+                            modifier = Modifier.weight(1f), singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                    OutlinedTextField(
+                        value = database, onValueChange = { database = it },
+                        label = { Text("数据库") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = schema, onValueChange = { schema = it },
+                        label = { Text("Schema") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = username, onValueChange = { username = it },
+                        label = { Text("用户名") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it },
+                        label = { Text("密码") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                            }
+                        }
+                    )
+                }
+            }
+
+            testResult?.let {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val success = it.contains("成功")
+                    Icon(
+                        if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                        null, Modifier.size(16.dp),
+                        tint = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, style = MaterialTheme.typography.labelSmall,
+                        color = if (success) Color(0xFF4CAF50) else Color(0xFFEF5350))
+                }
+            }
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        if (host.isNotBlank()) {
+                            isTesting = true
+                            testResult = null
+                            val config = com.yueming.baby.data.cloud.PostgresConfig(
+                                host = host.trim(), port = port.toIntOrNull() ?: 15432,
+                                database = database.trim(), username = username,
+                                password = password, schema = schema.trim()
+                            )
+                            scope.launch {
+                                val result = PostgresManager.initialize(config)
+                                isTesting = false
+                                testResult = result.fold(
+                                    onSuccess = { "连接成功" },
+                                    onFailure = { "连接失败: ${it.message}" }
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isTesting,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
+                    Text("测试连接", fontSize = 13.sp)
+                }
+                Button(
+                    onClick = { onDismiss() },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFAB47BC)),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("保存", color = Color.White) }
             }
         }
     }

@@ -90,6 +90,13 @@ dependencies {
     // WorkManager for scheduled backup
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // PostgreSQL JDBC
+    implementation("org.postgresql:postgresql:42.7.4")
+    // SMB (jcifs-ng)
+    implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+    // FTP (Apache Commons Net)
+    implementation("commons-net:commons-net:3.11.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

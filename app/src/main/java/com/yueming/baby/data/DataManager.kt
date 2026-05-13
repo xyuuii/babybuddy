@@ -3,20 +3,21 @@ package com.yueming.baby.data
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.yueming.baby.data.entity.*
+import com.yueming.baby.data.cloud.CloudManager
+import com.yueming.baby.data.cloud.CloudStorageConfig
+import com.yueming.baby.data.cloud.PostgresManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.File
-import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object DataManager {
-    private var db: AppDatabase? = null
     private var appContext: Context? = null
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var isCloudInitialized = false
 
-    // --- Photo storage helper ---
+    // --- Photo cache helper (copy content URI to temp for upload) ---
     fun copyPhotoToInternalStorage(uri: android.net.Uri): String? {
         val context = appContext ?: return null
         return try {
@@ -33,7 +34,7 @@ object DataManager {
         }
     }
 
-    // --- Video storage helper ---
+    // --- Video cache helper ---
     fun copyVideoToInternalStorage(uri: android.net.Uri): String? {
         val context = appContext ?: return null
         return try {
@@ -48,9 +49,7 @@ object DataManager {
             } ?: ".mp4"
             val videoFile = java.io.File(videoDir, "video-${java.util.UUID.randomUUID()}$ext")
             context.contentResolver.openInputStream(uri)?.use { input ->
-                videoFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+                videoFile.outputStream().use { output -> input.copyTo(output) }
             }
             android.util.Log.d("DataManager", "Video copied to: ${videoFile.absolutePath}")
             videoFile.absolutePath
@@ -69,7 +68,6 @@ object DataManager {
 
     val activeBabyId: String get() = _activeBaby.value.id
 
-    // Legacy alias for backward compatibility
     val babyInfo: StateFlow<BabyInfo> = _activeBaby.asStateFlow()
 
     private val _timeline = MutableStateFlow<List<TimelineRecord>>(emptyList())
@@ -99,7 +97,11 @@ object DataManager {
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
-    // WebDAV state
+    // Cloud storage config
+    private val _cloudStorageConfig = MutableStateFlow(CloudStorageConfig())
+    val cloudStorageConfig: StateFlow<CloudStorageConfig> = _cloudStorageConfig.asStateFlow()
+
+    // Legacy WebDAV state (forward-compat)
     private val _webDavConfig = MutableStateFlow<WebDavManager.WebDavConfig?>(null)
     val webDavConfig: StateFlow<WebDavManager.WebDavConfig?> = _webDavConfig.asStateFlow()
 
@@ -111,115 +113,156 @@ object DataManager {
 
     // --- Initialization ---
     fun init(context: Context) {
-        if (db != null) return
+        if (appContext != null) return
         appContext = context.applicationContext
-        db = AppDatabase.getInstance(context.applicationContext)
-        android.util.Log.d("DataManager", "Database initialized, starting data load...")
+        android.util.Log.d("DataManager", "Initializing with cloud backend...")
         appScope.launch {
-            loadFromRoom()
-            android.util.Log.d("DataManager",
-                "Data loaded. Babies: ${_babies.value.size}, Timeline: ${_timeline.value.size}, Photos: ${_photos.value.size}")
+            try {
+                // Initialize PostgreSQL connection
+                val pgResult = PostgresManager.initialize()
+                if (pgResult.isSuccess) {
+                    isCloudInitialized = true
+                    android.util.Log.d("DataManager", "PostgreSQL connected")
+                    loadFromPostgres()
+                } else {
+                    android.util.Log.w("DataManager", "PostgreSQL init failed, using local-only mode")
+                    // Fall back to empty data for now (no Room available)
+                    _babies.value = emptyList()
+                    _activeBaby.value = BabyInfo()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DataManager", "Init failed", e)
+            }
         }
     }
 
-    private suspend fun loadFromRoom() {
-        val database = db ?: return
+    private suspend fun loadFromPostgres() {
         val gson = Gson()
 
         // Load all babies
-        val babyEntities = database.babyDao().getAllBabies()
-        if (babyEntities.isNotEmpty()) {
-            _babies.value = babyEntities.map {
-                BabyInfo(
-                    id = it.id, name = it.name, nickname = it.nickname,
-                    birthDate = it.birthDate, gender = it.gender,
-                    avatar = it.avatarUri
+        val babiesResult = PostgresManager.getAllBabies()
+        if (babiesResult.isSuccess) {
+            val babyList = babiesResult.getOrThrow()
+            if (babyList.isNotEmpty()) {
+                _babies.value = babyList.map { row ->
+                    BabyInfo(
+                        id = row["id"] as? String ?: "",
+                        name = row["name"] as? String ?: "",
+                        nickname = row["nickname"] as? String ?: "",
+                        birthDate = row["birth_date"] as? String ?: "",
+                        gender = row["gender"] as? String ?: "",
+                        avatar = row["avatar_url"] as? String
+                    )
+                }
+                val activeRow = babyList.firstOrNull { (it["is_active"] as? Boolean) == true }
+                    ?: babyList.first()
+                _activeBaby.value = BabyInfo(
+                    id = activeRow["id"] as? String ?: "",
+                    name = activeRow["name"] as? String ?: "",
+                    nickname = activeRow["nickname"] as? String ?: "",
+                    birthDate = activeRow["birth_date"] as? String ?: "",
+                    gender = activeRow["gender"] as? String ?: "",
+                    avatar = activeRow["avatar_url"] as? String
                 )
+            } else {
+                _babies.value = emptyList()
+                _activeBaby.value = BabyInfo()
             }
-            val activeEntity = babyEntities.firstOrNull { it.isActive } ?: babyEntities.first()
-            _activeBaby.value = BabyInfo(
-                id = activeEntity.id, name = activeEntity.name,
-                nickname = activeEntity.nickname, birthDate = activeEntity.birthDate,
-                gender = activeEntity.gender, avatar = activeEntity.avatarUri
-            )
-        } else {
-            _babies.value = emptyList()
-            _activeBaby.value = BabyInfo()
         }
 
-        // Load data for active baby
-        loadBabyData()
-        loadGlobalSettings()
+        // Load baby data
+        loadBabyDataFromPostgres()
+        loadGlobalSettingsFromPostgres()
     }
 
-    private suspend fun loadBabyData() {
-        val database = db ?: return
+    private suspend fun loadBabyDataFromPostgres() {
         val babyId = _activeBaby.value.id
         val gson = Gson()
 
         if (babyId.isEmpty()) {
-            _timeline.value = emptyList<TimelineRecord>().toMutableList()
-            _photos.value = emptyList<PhotoEntry>().toMutableList()
+            _timeline.value = emptyList()
+            _photos.value = emptyList()
             return
         }
 
         // Load timeline
-        val records = database.timelineDao().getAllByBaby(babyId).map { entity ->
-            TimelineRecord(
-                id = entity.id, babyId = entity.babyId, date = entity.date,
-                title = entity.title, description = entity.description,
-                category = entity.category,
-                tags = parseJsonList(gson, entity.tags),
-                photos = parseJsonList(gson, entity.photos),
-                videos = parseJsonList(gson, entity.videos)
-            )
+        val timelineResult = PostgresManager.getAllTimelineByBaby(babyId)
+        if (timelineResult.isSuccess) {
+            _timeline.value = timelineResult.getOrThrow().map { row ->
+                TimelineRecord(
+                    id = row["id"] as? String ?: "",
+                    babyId = row["baby_id"] as? String ?: "",
+                    date = row["date"] as? String ?: "",
+                    title = row["title"] as? String ?: "",
+                    description = row["description"] as? String ?: "",
+                    category = row["category"] as? String ?: "",
+                    tags = parseJsonList(gson, row["tags"] as? String ?: "[]"),
+                    photos = parseJsonList(gson, row["photos"] as? String ?: "[]"),
+                    videos = parseJsonList(gson, row["videos"] as? String ?: "[]")
+                )
+            }
         }
-        _timeline.value = records.toMutableList()
 
         // Load photos
-        val photoList = database.photoDao().getAllByBaby(babyId).map { entity ->
-            PhotoEntry(
-                id = entity.id, babyId = entity.babyId, url = entity.url,
-                caption = entity.caption, date = entity.date,
-                timelineRecordId = entity.timelineRecordId,
-                tags = parseJsonList(gson, entity.tags)
-            )
+        val photosResult = PostgresManager.getAllPhotosByBaby(babyId)
+        if (photosResult.isSuccess) {
+            _photos.value = photosResult.getOrThrow().map { row ->
+                PhotoEntry(
+                    id = row["id"] as? String ?: "",
+                    babyId = row["baby_id"] as? String ?: "",
+                    url = row["url"] as? String ?: "",
+                    caption = row["caption"] as? String ?: "",
+                    date = row["date"] as? String ?: "",
+                    timelineRecordId = row["timeline_record_id"] as? String,
+                    tags = parseJsonList(gson, row["tags"] as? String ?: "[]")
+                )
+            }
         }
-        _photos.value = photoList.toMutableList()
     }
 
-    private suspend fun loadGlobalSettings() {
-        val database = db ?: return
+    private suspend fun loadGlobalSettingsFromPostgres() {
         val gson = Gson()
 
         // Load custom categories
-        val catJson = database.settingsDao().get("custom_categories")?.value
-        if (catJson != null) {
+        val catResult = PostgresManager.getSetting("custom_categories")
+        if (catResult.isSuccess && catResult.getOrNull() != null) {
             try {
                 val type = object : TypeToken<List<CategoryConfig>>() {}.type
-                val cats: List<CategoryConfig> = gson.fromJson(catJson, type)
+                val cats: List<CategoryConfig> = gson.fromJson(catResult.getOrNull(), type)
                 _customCategories.value = cats.toMutableList()
             } catch (_: Exception) {}
         }
 
         // Load AI config (legacy)
-        val aiJson = database.settingsDao().get("ai_config")?.value
-        if (aiJson != null) {
+        val aiResult = PostgresManager.getSetting("ai_config")
+        if (aiResult.isSuccess && aiResult.getOrNull() != null) {
             try {
-                _aiConfig.value = gson.fromJson(aiJson, AIConfig::class.java)
+                _aiConfig.value = gson.fromJson(aiResult.getOrNull(), AIConfig::class.java)
             } catch (_: Exception) {}
         }
 
         // Load AI profiles
-        val profilesJson = database.settingsDao().get("ai_profiles")?.value
-        if (profilesJson != null) {
-            try {
-                val type = object : TypeToken<List<AIProfile>>() {}.type
-                _aiProfiles.value = gson.fromJson(profilesJson, type)
-            } catch (_: Exception) {}
+        val profilesResult = PostgresManager.getAllAIProfiles()
+        if (profilesResult.isSuccess) {
+            val profileList = profilesResult.getOrThrow()
+            if (profileList.isNotEmpty()) {
+                _aiProfiles.value = profileList.map { row ->
+                    AIProfile(
+                        id = row["id"] as? String ?: "",
+                        name = row["name"] as? String ?: "",
+                        apiBaseUrl = row["api_base_url"] as? String ?: "",
+                        apiKey = row["api_key"] as? String ?: "",
+                        model = row["model"] as? String ?: "",
+                        systemPrompt = row["system_prompt"] as? String ?: "",
+                        temperature = (row["temperature"] as? Number)?.toFloat() ?: 0.7f,
+                        maxTokens = (row["max_tokens"] as? Number)?.toInt() ?: 2048,
+                        isActive = (row["is_active"] as? Boolean) ?: false
+                    )
+                }
+            }
         }
 
-        // If no profiles exist, migrate legacy config
+        // Migrate legacy AI config if no profiles
         if (_aiProfiles.value.isEmpty() && _aiConfig.value.apiKey.isNotEmpty()) {
             val legacyProfile = AIProfile(
                 name = "默认配置",
@@ -229,19 +272,28 @@ object DataManager {
                 isActive = true
             )
             _aiProfiles.value = listOf(legacyProfile)
-            persistAIPprofiles()
+            persistAIProfiles()
         }
 
         // Load theme
-        database.settingsDao().get("theme_mode")?.value?.let {
-            try { _themeMode.value = ThemeMode.valueOf(it) } catch (_: Exception) {}
+        val themeResult = PostgresManager.getSetting("theme_mode")
+        if (themeResult.isSuccess && themeResult.getOrNull() != null) {
+            try { _themeMode.value = ThemeMode.valueOf(themeResult.getOrNull()!!) } catch (_: Exception) {}
         }
 
         // Load WebDAV config
-        val wdJson = database.settingsDao().get("webdav_config")?.value
-        if (wdJson != null) {
+        val wdResult = PostgresManager.getSetting("webdav_config")
+        if (wdResult.isSuccess && wdResult.getOrNull() != null) {
             try {
-                _webDavConfig.value = gson.fromJson(wdJson, WebDavManager.WebDavConfig::class.java)
+                _webDavConfig.value = gson.fromJson(wdResult.getOrNull(), WebDavManager.WebDavConfig::class.java)
+            } catch (_: Exception) {}
+        }
+
+        // Load cloud storage config
+        val csResult = PostgresManager.getSetting("cloud_storage_config")
+        if (csResult.isSuccess && csResult.getOrNull() != null) {
+            try {
+                _cloudStorageConfig.value = gson.fromJson(csResult.getOrNull(), CloudStorageConfig::class.java)
             } catch (_: Exception) {}
         }
     }
@@ -253,34 +305,46 @@ object DataManager {
         } catch (_: Exception) { emptyList() }
     }
 
+    // --- Cloud Storage Config ---
+    fun saveCloudStorageConfig(config: CloudStorageConfig) {
+        _cloudStorageConfig.value = config
+        appScope.launch {
+            val json = Gson().toJson(config)
+            PostgresManager.upsertSetting("cloud_storage_config", json)
+        }
+    }
+
     // --- Baby Management ---
     fun addBaby(info: BabyInfo) {
-        val entity = BabyEntity(
-            id = if (info.id.isEmpty()) java.util.UUID.randomUUID().toString() else info.id,
-            name = info.name, nickname = info.nickname,
-            birthDate = info.birthDate, gender = info.gender,
-            avatarUri = info.avatar
+        val entityId = if (info.id.isEmpty()) java.util.UUID.randomUUID().toString() else info.id
+        val baby = BabyInfo(
+            id = entityId, name = info.name, nickname = info.nickname,
+            birthDate = info.birthDate, gender = info.gender, avatar = info.avatar
         )
-        _babies.value = (_babies.value + BabyInfo(
-            id = entity.id, name = entity.name, nickname = entity.nickname,
-            birthDate = entity.birthDate, gender = entity.gender,
-            avatar = entity.avatarUri
-        )).toMutableList()
-        db?.let { database ->
-            appScope.launch { database.babyDao().upsert(entity) }
+        _babies.value = (_babies.value + baby).toMutableList()
+
+        if (isCloudInitialized) {
+            appScope.launch {
+                PostgresManager.upsertBaby(
+                    id = entityId, name = info.name, nickname = info.nickname,
+                    birthDate = info.birthDate, gender = info.gender,
+                    avatarUrl = info.avatar, isActive = _babies.value.size == 1,
+                    createdAt = System.currentTimeMillis()
+                )
+            }
         }
     }
 
     fun switchBaby(babyId: String) {
-        val babies = _babies.value
-        val target = babies.find { it.id == babyId } ?: return
+        val babiesList = _babies.value
+        val target = babiesList.find { it.id == babyId } ?: return
         _activeBaby.value = target
         appScope.launch {
-            db?.let { database ->
-                database.babyDao().deactivateAll()
-                database.babyDao().setActive(babyId)
+            if (isCloudInitialized) {
+                PostgresManager.deactivateAllBabies()
+                PostgresManager.setActiveBaby(babyId)
             }
-            loadBabyData()
+            loadBabyDataFromPostgres()
         }
     }
 
@@ -290,43 +354,47 @@ object DataManager {
             return
         }
         _babies.value = _babies.value.filter { it.id != babyId }.toMutableList()
-        db?.let { database ->
-            appScope.launch {
-                database.babyDao().deleteById(babyId)
-                database.timelineDao().deleteByBabyId(babyId)
-                database.photoDao().deleteByBabyId(babyId)
-                // Switch to first remaining baby
-                val remaining = database.babyDao().getAllBabies()
-                if (remaining.isNotEmpty()) {
-                    val first = remaining.first()
-                    database.babyDao().setActive(first.id)
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deleteBaby(babyId)
+                PostgresManager.deleteTimelineByBabyId(babyId)
+                PostgresManager.deletePhotosByBabyId(babyId)
+                val remaining = PostgresManager.getAllBabies()
+                if (remaining.isSuccess && remaining.getOrThrow().isNotEmpty()) {
+                    val first = remaining.getOrThrow().first()
+                    val firstId = first["id"] as? String ?: ""
+                    PostgresManager.setActiveBaby(firstId)
                     withContext(Dispatchers.Main) {
                         _activeBaby.value = BabyInfo(
-                            id = first.id, name = first.name, nickname = first.nickname,
-                            birthDate = first.birthDate, gender = first.gender, avatar = first.avatarUri
+                            id = firstId,
+                            name = first["name"] as? String ?: "",
+                            nickname = first["nickname"] as? String ?: "",
+                            birthDate = first["birth_date"] as? String ?: "",
+                            gender = first["gender"] as? String ?: "",
+                            avatar = first["avatar_url"] as? String
                         )
                     }
-                    loadBabyData()
+                    loadBabyDataFromPostgres()
                 }
-                withContext(Dispatchers.Main) { onComplete() }
             }
-        } ?: onComplete()
+            withContext(Dispatchers.Main) { onComplete() }
+        }
     }
 
     fun updateBabyInfo(info: BabyInfo) {
         _activeBaby.value = info
-        // Update in babies list
         _babies.value = _babies.value.map {
             if (it.id == info.id) info else it
         }.toMutableList()
 
-        db?.let { database ->
+        if (isCloudInitialized) {
             appScope.launch {
-                database.babyDao().upsert(BabyEntity(
+                PostgresManager.upsertBaby(
                     id = info.id, name = info.name, nickname = info.nickname,
                     birthDate = info.birthDate, gender = info.gender,
-                    avatarUri = info.avatar
-                ))
+                    avatarUrl = info.avatar, isActive = true,
+                    createdAt = System.currentTimeMillis()
+                )
             }
         }
     }
@@ -335,17 +403,15 @@ object DataManager {
     fun addRecord(record: TimelineRecord) {
         val r = if (record.babyId.isEmpty()) record.copy(babyId = _activeBaby.value.id) else record
         _timeline.value = (_timeline.value + r).toMutableList()
-        db?.let { database ->
+
+        if (isCloudInitialized) {
             val gson = Gson()
             appScope.launch {
-                database.timelineDao().insert(TimelineEntity(
+                PostgresManager.upsertTimeline(
                     id = r.id, babyId = r.babyId, date = r.date,
-                    title = r.title, description = r.description,
-                    category = r.category,
-                    tags = gson.toJson(r.tags),
-                    photos = gson.toJson(r.photos),
-                    videos = gson.toJson(r.videos)
-                ))
+                    title = r.title, description = r.description, category = r.category,
+                    tags = gson.toJson(r.tags), photos = gson.toJson(r.photos), videos = gson.toJson(r.videos)
+                )
             }
         }
     }
@@ -358,35 +424,29 @@ object DataManager {
     fun deleteRecord(id: String) {
         _timeline.value = _timeline.value.filter { it.id != id }.toMutableList()
         _photos.value = _photos.value.filter { it.timelineRecordId != id }.toMutableList()
-        db?.let { database ->
-            appScope.launch {
-                database.timelineDao().deleteById(id)
-                database.photoDao().deleteByRecordId(id)
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deleteTimelineById(id)
+                PostgresManager.deletePhotosByRecordId(id)
             }
         }
     }
 
     private fun saveTimelineAsync() {
-        val database = db ?: return
         val records = _timeline.value
         val gson = Gson()
         appScope.launch {
-            val entities = records.map { record ->
-                TimelineEntity(
-                    id = record.id, babyId = record.babyId, date = record.date,
-                    title = record.title, description = record.description,
-                    category = record.category,
-                    tags = gson.toJson(record.tags),
-                    photos = gson.toJson(record.photos),
-                    videos = gson.toJson(record.videos)
-                )
-            }
-            val all = database.timelineDao().getAllOnce()
-            if (all.size != entities.size) {
-                all.forEach { database.timelineDao().deleteById(it.id) }
-                entities.forEach { database.timelineDao().insert(it) }
-            } else {
-                entities.forEach { database.timelineDao().insert(it) }
+            if (isCloudInitialized) {
+                records.forEach { record ->
+                    PostgresManager.upsertTimeline(
+                        id = record.id, babyId = record.babyId, date = record.date,
+                        title = record.title, description = record.description,
+                        category = record.category,
+                        tags = gson.toJson(record.tags),
+                        photos = gson.toJson(record.photos),
+                        videos = gson.toJson(record.videos)
+                    )
+                }
             }
         }
     }
@@ -395,23 +455,48 @@ object DataManager {
     fun addPhoto(photo: PhotoEntry) {
         val p = if (photo.babyId.isEmpty()) photo.copy(babyId = _activeBaby.value.id) else photo
         _photos.value = (listOf(p) + _photos.value).toMutableList()
-        db?.let { database ->
+
+        if (isCloudInitialized) {
             val gson = Gson()
             appScope.launch {
-                database.photoDao().insert(PhotoEntity(
+                PostgresManager.upsertPhoto(
                     id = p.id, babyId = p.babyId, url = p.url,
                     caption = p.caption, date = p.date,
                     timelineRecordId = p.timelineRecordId,
-                    tags = gson.toJson(p.tags)
-                ))
+                    tags = gson.toJson(p.tags),
+                    mediaType = if (p.tags.contains("视频")) "video" else "image"
+                )
+                // Trigger cloud upload for local file paths
+                val config = _cloudStorageConfig.value
+                val localFile = File(p.url)
+                if (localFile.exists()) {
+                    val remoteName = "photos/${p.id}.jpg"
+                    val result = CloudManager.uploadFile(p.url, remoteName, config)
+                    if (result.success) {
+                        val remoteUrl = CloudManager.getPublicUrl(result.remotePath, config)
+                        // Update photo url in PostgreSQL
+                        _photos.value = _photos.value.map {
+                            if (it.id == p.id) it.copy(url = remoteUrl) else it
+                        }.toMutableList()
+                        PostgresManager.upsertPhoto(
+                            id = p.id, babyId = p.babyId, url = remoteUrl,
+                            caption = p.caption, date = p.date,
+                            timelineRecordId = p.timelineRecordId,
+                            tags = gson.toJson(p.tags),
+                            mediaType = if (p.tags.contains("视频")) "video" else "image"
+                        )
+                    }
+                }
             }
         }
     }
 
     fun deletePhoto(id: String) {
         _photos.value = _photos.value.filter { it.id != id }.toMutableList()
-        db?.let { database ->
-            appScope.launch { database.photoDao().deleteById(id) }
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deletePhotoById(id)
+            }
         }
     }
 
@@ -427,79 +512,90 @@ object DataManager {
     }
 
     private fun persistCategories() {
-        db?.let { database ->
+        appScope.launch {
             val json = Gson().toJson(_customCategories.value)
-            appScope.launch {
-                database.settingsDao().upsert(SettingsEntity("custom_categories", json))
+            if (isCloudInitialized) {
+                PostgresManager.upsertSetting("custom_categories", json)
             }
         }
     }
 
-    // --- AI Config (legacy, kept for backward compat) ---
-    fun updateAIConfig(config: AIConfig) { _aiConfig.value = config
-        db?.let { database ->
+    // --- AI Config ---
+    fun updateAIConfig(config: AIConfig) {
+        _aiConfig.value = config
+        appScope.launch {
             val json = Gson().toJson(config)
-            appScope.launch {
-                database.settingsDao().upsert(SettingsEntity("ai_config", json))
+            if (isCloudInitialized) {
+                PostgresManager.upsertSetting("ai_config", json)
             }
         }
     }
+
     val isAIConfigured: Boolean get() {
         val profile = _aiProfiles.value.firstOrNull { it.isActive }
         return profile != null && profile.apiKey.isNotEmpty()
     }
 
     // --- AI Profile Management ---
-    private fun persistAIPprofiles() {
-        db?.let { database ->
-            val json = Gson().toJson(_aiProfiles.value)
-            appScope.launch {
-                database.settingsDao().upsert(SettingsEntity("ai_profiles", json))
+    private fun persistAIProfiles() {
+        appScope.launch {
+            if (isCloudInitialized) {
+                _aiProfiles.value.forEach { profile ->
+                    PostgresManager.upsertAIProfile(
+                        id = profile.id, name = profile.name,
+                        apiBaseUrl = profile.apiBaseUrl, apiKey = profile.apiKey,
+                        model = profile.model, systemPrompt = profile.systemPrompt,
+                        temperature = profile.temperature, maxTokens = profile.maxTokens,
+                        isActive = profile.isActive
+                    )
+                }
             }
         }
     }
 
     fun addAIProfile(profile: AIProfile) {
         _aiProfiles.value = (_aiProfiles.value + profile).toMutableList()
-        persistAIPprofiles()
+        persistAIProfiles()
     }
 
     fun updateAIProfile(profile: AIProfile) {
         _aiProfiles.value = _aiProfiles.value.map {
             if (it.id == profile.id) profile else it
         }.toMutableList()
-        persistAIPprofiles()
+        persistAIProfiles()
     }
 
     fun deleteAIProfile(profileId: String) {
         _aiProfiles.value = _aiProfiles.value.filter { it.id != profileId }.toMutableList()
-        // If we deleted the active profile, activate the first remaining one
         if (_aiProfiles.value.none { it.isActive } && _aiProfiles.value.isNotEmpty()) {
             val first = _aiProfiles.value.first()
             _aiProfiles.value = _aiProfiles.value.map {
                 if (it.id == first.id) it.copy(isActive = true) else it
             }.toMutableList()
         }
-        persistAIPprofiles()
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deleteAIProfile(profileId)
+            }
+        }
     }
 
     fun setActiveAIProfile(profileId: String) {
         _aiProfiles.value = _aiProfiles.value.map {
             it.copy(isActive = it.id == profileId)
         }.toMutableList()
-        persistAIPprofiles()
+        persistAIProfiles()
     }
 
     fun testAIProfileConnection(profile: AIProfile, onResult: (Result<Boolean>) -> Unit) {
         appScope.launch {
             try {
-                val baseUrl = profile.apiBaseUrl
                 val client = okhttp3.OkHttpClient.Builder()
                     .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
                 val request = okhttp3.Request.Builder()
-                    .url(baseUrl)
+                    .url(profile.apiBaseUrl)
                     .header("Authorization", "Bearer ${profile.apiKey}")
                     .build()
                 val response = client.newCall(request).execute()
@@ -526,9 +622,9 @@ object DataManager {
     // --- Theme ---
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
-        db?.let { database ->
-            appScope.launch {
-                database.settingsDao().upsert(SettingsEntity("theme_mode", mode.name))
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.upsertSetting("theme_mode", mode.name)
             }
         }
     }
@@ -536,19 +632,19 @@ object DataManager {
     // --- WebDAV ---
     fun saveWebDavConfig(config: WebDavManager.WebDavConfig) {
         _webDavConfig.value = config
-        db?.let { database ->
+        appScope.launch {
             val json = Gson().toJson(config)
-            appScope.launch {
-                database.settingsDao().upsert(SettingsEntity("webdav_config", json))
+            if (isCloudInitialized) {
+                PostgresManager.upsertSetting("webdav_config", json)
             }
         }
     }
 
     fun clearWebDavConfig() {
         _webDavConfig.value = null
-        db?.let { database ->
-            appScope.launch {
-                database.settingsDao().delete("webdav_config")
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deleteSetting("webdav_config")
             }
         }
     }
@@ -570,8 +666,8 @@ object DataManager {
         appScope.launch {
             try {
                 onProgress("正在导出数据...")
-                val db = db ?: throw Exception("数据库未初始化")
-                val json = db.exportToJson(activeBabyId)
+                val json = exportCurrentDataToJson()
+                if (json.isEmpty()) throw Exception("No data to export")
                 val jsonBytes = json.toByteArray(Charsets.UTF_8)
 
                 onProgress("正在打包...")
@@ -600,21 +696,52 @@ object DataManager {
         }
     }
 
+    private fun exportCurrentDataToJson(): String {
+        val gson = Gson()
+        val export = mapOf(
+            "baby" to _babies.value.map {
+                mapOf(
+                    "id" to it.id, "name" to it.name, "nickname" to it.nickname,
+                    "birthDate" to it.birthDate, "gender" to it.gender,
+                    "avatarUri" to it.avatar, "isActive" to (it.id == _activeBaby.value.id)
+                )
+            },
+            "activeBabyId" to _activeBaby.value.id,
+            "timeline" to _timeline.value.map {
+                mapOf(
+                    "id" to it.id, "babyId" to it.babyId, "date" to it.date,
+                    "title" to it.title, "description" to it.description,
+                    "category" to it.category,
+                    "tags" to it.tags,
+                    "photos" to it.photos,
+                    "videos" to it.videos
+                )
+            },
+            "photos" to _photos.value.map {
+                mapOf(
+                    "id" to it.id, "babyId" to it.babyId, "url" to it.url,
+                    "caption" to it.caption, "date" to it.date,
+                    "timelineRecordId" to it.timelineRecordId,
+                    "tags" to it.tags
+                )
+            },
+            "settings" to mapOf<String, String>()
+        )
+        return gson.toJson(export)
+    }
+
     private suspend fun createBackupZip(jsonData: ByteArray, babyId: String): ByteArray = withContext(Dispatchers.IO) {
         val baos = java.io.ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->
-            // Add database.json
             val jsonEntry = ZipEntry("database.json")
             zos.putNextEntry(jsonEntry)
             zos.write(jsonData)
             zos.closeEntry()
 
-            // Add photos directory
             val photosEntry = ZipEntry("photos/")
             zos.putNextEntry(photosEntry)
             zos.closeEntry()
 
-            // Collect photo URIs and add them as metadata
             val photoUrls = _photos.value.map { it.url }.filter { it.startsWith("content://") || it.startsWith("file://") }
             if (photoUrls.isNotEmpty()) {
                 val photoListEntry = ZipEntry("photos/manifest.json")
@@ -623,7 +750,6 @@ object DataManager {
                 zos.closeEntry()
             }
 
-            // Add videos directory  
             val videosEntry = ZipEntry("videos/")
             zos.putNextEntry(videosEntry)
             zos.closeEntry()
@@ -660,16 +786,107 @@ object DataManager {
     fun restoreFromBackup(bytes: ByteArray, onComplete: (Boolean) -> Unit) {
         appScope.launch {
             try {
-                // Extract zip and import
                 val jsonStr = extractJsonFromZip(bytes)
                 if (jsonStr != null) {
-                    db?.let { database ->
-                        val success = database.importFromJson(jsonStr)
-                        if (success) {
-                            loadFromRoom()
+                    val gson = Gson()
+                    val map = gson.fromJson(jsonStr, Map::class.java) ?: run {
+                        withContext(Dispatchers.Main) { onComplete(false) }
+                        return@launch
+                    }
+
+                    // Import babies
+                    val babiesList = map["baby"] as? List<*>
+                    val activeBabyId = map["activeBabyId"] as? String
+                    if (babiesList != null) {
+                        val newBabies = mutableListOf<BabyInfo>()
+                        babiesList.forEach { item ->
+                            val m = item as? Map<*, *> ?: return@forEach
+                            val bid = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString()
+                            val baby = BabyInfo(
+                                id = bid,
+                                name = m["name"] as? String ?: "",
+                                nickname = m["nickname"] as? String ?: "",
+                                birthDate = m["birthDate"] as? String ?: "",
+                                gender = m["gender"] as? String ?: "girl",
+                                avatar = m["avatarUri"] as? String
+                            )
+                            newBabies.add(baby)
+                            if (isCloudInitialized) {
+                                PostgresManager.upsertBaby(
+                                    id = bid, name = baby.name, nickname = baby.nickname,
+                                    birthDate = baby.birthDate, gender = baby.gender,
+                                    avatarUrl = baby.avatar, isActive = (bid == activeBabyId),
+                                    createdAt = System.currentTimeMillis()
+                                )
+                            }
                         }
-                        withContext(Dispatchers.Main) { onComplete(success) }
-                    } ?: withContext(Dispatchers.Main) { onComplete(false) }
+                        _babies.value = newBabies
+                        val active = newBabies.find { it.id == activeBabyId } ?: newBabies.firstOrNull()
+                        if (active != null) _activeBaby.value = active
+                    }
+
+                    // Import timeline
+                    val timelineList = map["timeline"] as? List<*>
+                    if (timelineList != null) {
+                        val newTimeline = mutableListOf<TimelineRecord>()
+                        timelineList.mapNotNull { item ->
+                            val m = item as? Map<*, *> ?: return@mapNotNull null
+                            val record = TimelineRecord(
+                                id = m["id"] as? String ?: "",
+                                babyId = m["babyId"] as? String ?: "",
+                                date = m["date"] as? String ?: "",
+                                title = m["title"] as? String ?: "",
+                                description = m["description"] as? String ?: "",
+                                category = m["category"] as? String ?: "other",
+                                tags = (m["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                                photos = (m["photos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                                videos = (m["videos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                            )
+                            newTimeline.add(record)
+                            if (isCloudInitialized) {
+                                PostgresManager.upsertTimeline(
+                                    id = record.id, babyId = record.babyId, date = record.date,
+                                    title = record.title, description = record.description,
+                                    category = record.category,
+                                    tags = gson.toJson(record.tags),
+                                    photos = gson.toJson(record.photos),
+                                    videos = gson.toJson(record.videos)
+                                )
+                            }
+                        }
+                        _timeline.value = newTimeline
+                    }
+
+                    // Import photos
+                    val photosList = map["photos"] as? List<*>
+                    if (photosList != null) {
+                        val newPhotos = mutableListOf<PhotoEntry>()
+                        photosList.mapNotNull { item ->
+                            val m = item as? Map<*, *> ?: return@mapNotNull null
+                            val photo = PhotoEntry(
+                                id = m["id"] as? String ?: "",
+                                babyId = m["babyId"] as? String ?: "",
+                                url = m["url"] as? String ?: "",
+                                caption = m["caption"] as? String ?: "",
+                                date = m["date"] as? String ?: "",
+                                timelineRecordId = m["timelineRecordId"] as? String,
+                                tags = (m["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                            )
+                            newPhotos.add(photo)
+                            if (isCloudInitialized) {
+                                PostgresManager.upsertPhoto(
+                                    id = photo.id, babyId = photo.babyId, url = photo.url,
+                                    caption = photo.caption, date = photo.date,
+                                    timelineRecordId = photo.timelineRecordId,
+                                    tags = gson.toJson(photo.tags),
+                                    mediaType = "image"
+                                )
+                            }
+                        }
+                        _photos.value = newPhotos
+                    }
+
+                    withContext(Dispatchers.Main) { onComplete(true) }
                 } else {
                     withContext(Dispatchers.Main) { onComplete(false) }
                 }
@@ -690,55 +907,67 @@ object DataManager {
                 entry = zis.nextEntry
             }
             null
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
-    // --- Export / Import (legacy) ---
+    // --- Export / Import ---
     fun exportToJson(onResult: (String) -> Unit) {
-        db?.let { database ->
-            appScope.launch {
-                val json = database.exportToJson(activeBabyId)
-                withContext(Dispatchers.Main) { onResult(json) }
-            }
+        appScope.launch {
+            val json = exportCurrentDataToJson()
+            withContext(Dispatchers.Main) { onResult(json) }
         }
     }
 
     fun importFromJson(json: String, onResult: (Boolean) -> Unit) {
-        db?.let { database ->
-            appScope.launch {
-                val success = database.importFromJson(json)
-                if (success) loadFromRoom()
-                withContext(Dispatchers.Main) { onResult(success) }
+        appScope.launch {
+            try {
+                val gson = Gson()
+                val map = gson.fromJson(json, Map::class.java) ?: run {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                    return@launch
+                }
+                // Simple import - just load into StateFlows
+                val babiesList = map["baby"] as? List<*>
+                if (babiesList != null) {
+                    val newBabies = babiesList.mapNotNull { item ->
+                        val m = item as? Map<*, *> ?: return@mapNotNull null
+                        BabyInfo(
+                            id = m["id"] as? String ?: "",
+                            name = m["name"] as? String ?: "",
+                            nickname = m["nickname"] as? String ?: "",
+                            birthDate = m["birthDate"] as? String ?: "",
+                            gender = m["gender"] as? String ?: "girl",
+                            avatar = m["avatarUri"] as? String
+                        )
+                    }
+                    _babies.value = newBabies
+                    newBabies.firstOrNull()?.let { _activeBaby.value = it }
+                }
+                withContext(Dispatchers.Main) { onResult(true) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onResult(false) }
             }
         }
     }
 
     fun resetAllData(onComplete: () -> Unit) {
-        db?.let { database ->
-            appScope.launch {
-                database.timelineDao().run {
-                    getAllOnce().forEach { deleteById(it.id) }
-                }
-                database.photoDao().run {
-                    getAllOnce().forEach { deleteById(it.id) }
-                }
-                database.babyDao().deleteAll()
-                database.settingsDao().deleteAll()
-                _timeline.value = mutableListOf()
-                _photos.value = mutableListOf()
-                _babies.value = emptyList()
-                _activeBaby.value = BabyInfo()
-                _customCategories.value = emptyList()
-                _aiConfig.value = AIConfig()
-                _aiProfiles.value = emptyList()
-                _chatMessages.value = emptyList()
-                _themeMode.value = ThemeMode.SYSTEM
-                _webDavConfig.value = null
-                withContext(Dispatchers.Main) { onComplete() }
+        appScope.launch {
+            if (isCloudInitialized) {
+                PostgresManager.deleteAllSettings()
             }
-        } ?: onComplete()
+            _timeline.value = emptyList()
+            _photos.value = emptyList()
+            _babies.value = emptyList()
+            _activeBaby.value = BabyInfo()
+            _customCategories.value = emptyList()
+            _aiConfig.value = AIConfig()
+            _aiProfiles.value = emptyList()
+            _chatMessages.value = emptyList()
+            _themeMode.value = ThemeMode.SYSTEM
+            _webDavConfig.value = null
+            _cloudStorageConfig.value = CloudStorageConfig()
+            withContext(Dispatchers.Main) { onComplete() }
+        }
     }
 
     // --- Age calculations ---

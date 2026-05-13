@@ -10,6 +10,10 @@ import com.yueming.baby.data.dao.*
 import com.yueming.baby.data.entity.*
 import com.google.gson.Gson
 
+@Deprecated(
+    message = "Room database has been replaced by PostgreSQL cloud backend (PostgresManager).",
+    replaceWith = ReplaceWith("PostgresManager", "com.yueming.baby.data.cloud.PostgresManager")
+)
 @Database(
     entities = [TimelineEntity::class, PhotoEntity::class, BabyEntity::class, SettingsEntity::class],
     version = 3,

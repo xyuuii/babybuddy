@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
         try {
             DataManager.init(applicationContext)
+            android.util.Log.d("YueMing", "DataManager initialized with cloud backend")
         } catch (e: Exception) {
             android.util.Log.e("YueMingCrash", "DataManager.init failed", e)
             Toast.makeText(this, "初始化失败: ${e.message}", Toast.LENGTH_LONG).show()
