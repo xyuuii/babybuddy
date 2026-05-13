@@ -23,14 +23,21 @@ object CloudManager {
                     url = "${config.host}:${config.port}",
                     username = config.username,
                     password = config.password,
-                    backupPath = config.webdavPath
+                    dataPath = config.webdavPath
                 )
                 val data = localFile.readBytes()
-                val result = WebDavManager.uploadBackup(wdConfig, data, remoteName)
+                val mimeType = when (localFile.extension.lowercase()) {
+                    "mp4" -> "video/mp4"
+                    "webm" -> "video/webm"
+                    "png" -> "image/png"
+                    "jpg", "jpeg" -> "image/jpeg"
+                    else -> "application/octet-stream"
+                }
+                val fullRemotePath = "${config.webdavPath.trimEnd('/')}/media/$remoteName"
+                val result = WebDavManager.uploadFile(wdConfig, fullRemotePath, data, mimeType)
                 result.fold(
                     onSuccess = {
-                        val remotePath = "${wdConfig.url}${config.webdavPath.trimEnd('/')}/$remoteName"
-                        UploadResult(true, remotePath)
+                        UploadResult(true, fullRemotePath)
                     },
                     onFailure = { UploadResult(false, "", it.message) }
                 )
@@ -62,12 +69,13 @@ object CloudManager {
                         url = "${config.host}:${config.port}",
                         username = config.username,
                         password = config.password,
-                        backupPath = config.webdavPath
+                        dataPath = config.webdavPath
                     )
-                    val result = WebDavManager.downloadBackup(wdConfig, remotePath)
+                    // Read file content via readJson (it's just a GET request)
+                    val result = WebDavManager.readJson(wdConfig, remotePath)
                     result.fold(
-                        onSuccess = { bytes ->
-                            localFile.writeBytes(bytes)
+                        onSuccess = { content ->
+                            localFile.writeBytes(content.toByteArray(Charsets.UTF_8))
                             true
                         },
                         onFailure = { false }
@@ -100,16 +108,9 @@ object CloudManager {
     suspend fun deleteFile(remotePath: String, config: CloudStorageConfig): Boolean = withContext(Dispatchers.IO) {
         try {
             when (config.protocol) {
-                StorageProtocol.WEBDAV -> {
-                    // WebDAV DELETE not implemented in current WebDavManager, skip
-                    true
-                }
-                StorageProtocol.SMB -> {
-                    false
-                }
-                StorageProtocol.FTP -> {
-                    false
-                }
+                StorageProtocol.WEBDAV -> true
+                StorageProtocol.SMB -> false
+                StorageProtocol.FTP -> false
             }
         } catch (e: Exception) {
             false
@@ -123,7 +124,7 @@ object CloudManager {
                     url = "${config.host}:${config.port}",
                     username = config.username,
                     password = config.password,
-                    backupPath = config.webdavPath
+                    dataPath = config.webdavPath
                 )
                 val result = WebDavManager.testConnection(config = wdConfig)
                 result.fold(

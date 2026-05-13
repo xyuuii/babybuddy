@@ -52,7 +52,6 @@ fun SettingsScreen() {
     val themeMode by DataManager.themeMode.collectAsState()
     val webDavConfig by DataManager.webDavConfig.collectAsState()
     val cloudStorageConfig by DataManager.cloudStorageConfig.collectAsState()
-    val isBackingUp by DataManager.isBackingUp.collectAsState()
     val allCategories = DataManager.allCategories
 
     var showBabySheet by remember { mutableStateOf(false) }
@@ -61,7 +60,6 @@ fun SettingsScreen() {
     var showCategorySheet by remember { mutableStateOf(false) }
     var showAddBabySheet by remember { mutableStateOf(false) }
     var showWebDavSheet by remember { mutableStateOf(false) }
-    var showRestoreSheet by remember { mutableStateOf(false) }
     var showCloudStorageSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -121,105 +119,6 @@ fun SettingsScreen() {
                     }
                     Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                }
-            }
-        }
-
-        // ---- Backup & Sync Group ----
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Cloud, null, Modifier.size(20.dp), tint = Color(0xFF66BB6A))
-                        Spacer(Modifier.width(10.dp))
-                        Text("备份与同步", fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            if (webDavConfig != null) "已连接" else "未配置",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (webDavConfig != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (webDavConfig != null) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Dns, null, Modifier.size(16.dp),
-                                    tint = if (webDavConfig != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.width(8.dp))
-                                Text("WebDAV",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.weight(1f))
-                                TextButton(onClick = { showWebDavSheet = true }) {
-                                    Text(if (webDavConfig != null) "修改" else "配置", fontSize = 12.sp)
-                                }
-                            }
-                            if (webDavConfig != null) {
-                                Spacer(Modifier.height(8.dp))
-                                Text(webDavConfig!!.url,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1)
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                DataManager.uploadBackup(
-                                    onProgress = { msg ->
-                                        scope.launch {
-                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    onComplete = { result ->
-                                        result.onSuccess {
-                                            Toast.makeText(context, "备份成功！", Toast.LENGTH_SHORT).show()
-                                        }.onFailure {
-                                            Toast.makeText(context, "备份失败: ${it.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = webDavConfig != null && !isBackingUp,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF66BB6A)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            if (isBackingUp) {
-                                CircularProgressIndicator(Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Upload, null, Modifier.size(14.dp))
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            Text("立即备份", fontSize = 13.sp, color = Color.White)
-                        }
-                        OutlinedButton(
-                            onClick = { showRestoreSheet = true },
-                            modifier = Modifier.weight(1f),
-                            enabled = webDavConfig != null,
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Icon(Icons.Default.Download, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("从备份恢复", fontSize = 13.sp)
-                        }
-                    }
                 }
             }
         }
@@ -409,31 +308,6 @@ fun SettingsScreen() {
         )
     }
 
-    // Restore Sheet
-    if (showRestoreSheet) {
-        RestoreSheet(
-            onDismiss = { showRestoreSheet = false },
-            onRestore = { filename ->
-                DataManager.downloadBackup(filename,
-                    onProgress = { msg ->
-                        scope.launch {
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onComplete = { result ->
-                        result.onSuccess { bytes ->
-                            DataManager.restoreFromBackup(bytes) { success ->
-                                Toast.makeText(context, if (success) "恢复成功！" else "恢复失败", Toast.LENGTH_SHORT).show()
-                                showRestoreSheet = false
-                            }
-                        }.onFailure {
-                            Toast.makeText(context, "下载失败: ${it.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-        )
-    }
 }
 
 // ---- Helper Components ----
@@ -1225,7 +1099,7 @@ private fun WebDavConfigSheet(
     var url by remember { mutableStateOf(currentConfig?.url ?: "") }
     var username by remember { mutableStateOf(currentConfig?.username ?: "") }
     var password by remember { mutableStateOf(currentConfig?.password ?: "") }
-    var backupPath by remember { mutableStateOf(currentConfig?.backupPath ?: "/sata1-15529232180/yueming-backups/") }
+    var dataPath by remember { mutableStateOf(currentConfig?.dataPath ?: "/sata1-15529232180/yueming/data") }
     var showPassword by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
@@ -1268,9 +1142,9 @@ private fun WebDavConfigSheet(
                 }
             )
             OutlinedTextField(
-                value = backupPath, onValueChange = { backupPath = it },
-                label = { Text("备份路径") },
-                placeholder = { Text("/path/to/backups/") },
+                value = dataPath, onValueChange = { dataPath = it },
+                label = { Text("数据路径") },
+                placeholder = { Text("/sata1-15529232180/yueming/data") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
@@ -1305,7 +1179,7 @@ private fun WebDavConfigSheet(
                             isTesting = true
                             testResult = null
                             dirContents = emptyList()
-                            val config = WebDavManager.WebDavConfig(url.trim(), username, password, backupPath.trim())
+                            val config = WebDavManager.WebDavConfig(url.trim(), username, password, dataPath.trim())
                             DataManager.testWebDavConnection(config) { result ->
                                 isTesting = false
                                 result.onSuccess { testRes ->
@@ -1328,7 +1202,7 @@ private fun WebDavConfigSheet(
                 Button(
                     onClick = {
                         if (url.isNotBlank()) {
-                            onSave(WebDavManager.WebDavConfig(url.trim(), username, password, backupPath.trim()))
+                            onSave(WebDavManager.WebDavConfig(url.trim(), username, password, dataPath.trim()))
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -1339,67 +1213,6 @@ private fun WebDavConfigSheet(
             if (currentConfig != null) {
                 TextButton(onClick = { onClear(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
                     Text("清除 WebDAV 配置", color = Color(0xFFEF5350), fontSize = 13.sp)
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RestoreSheet(
-    onDismiss: () -> Unit,
-    onRestore: (String) -> Unit
-) {
-    var backupFiles by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        DataManager.refreshBackupList { result ->
-            result.onSuccess { backupFiles = it }
-            isLoading = false
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("从备份恢复", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("选择要恢复的备份文件:",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            if (isLoading) {
-                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (backupFiles.isEmpty()) {
-                Text("没有找到备份文件",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp))
-            } else {
-                backupFiles.forEach { file ->
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onRestore(file) }
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Archive, null, Modifier.size(20.dp), tint = Color(0xFF66BB6A))
-                        Spacer(Modifier.width(12.dp))
-                        Text(file, style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.weight(1f))
-                        Icon(Icons.Default.Download, null, Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary)
-                    }
                 }
             }
         }

@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 object DataManager {
     private var appContext: Context? = null
@@ -110,12 +108,6 @@ object DataManager {
     private val _webDavConfig = MutableStateFlow<WebDavManager.WebDavConfig?>(null)
     val webDavConfig: StateFlow<WebDavManager.WebDavConfig?> = _webDavConfig.asStateFlow()
 
-    private val _backupFiles = MutableStateFlow<List<String>>(emptyList())
-    val backupFiles: StateFlow<List<String>> = _backupFiles.asStateFlow()
-
-    private val _isBackingUp = MutableStateFlow(false)
-    val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
-
     // --- WebDAV Config helper ---
     private fun getWebDavConfig(): WebDavManager.WebDavConfig {
         val wd = _webDavConfig.value
@@ -125,7 +117,7 @@ object DataManager {
             url = "${cs.host}:${cs.port}",
             username = cs.username,
             password = cs.password,
-            backupPath = cs.webdavPath
+            dataPath = cs.webdavPath
         )
     }
 
@@ -323,7 +315,8 @@ object DataManager {
                 try {
                     val config = getWebDavConfig()
                     val json = Gson().toJson(_babies.value)
-                    WebDavManager.writeJson(config, "$DATA_PATH/babies.json", json)
+                    val result = WebDavManager.writeJson(config, "$DATA_PATH/babies.json", json)
+                    android.util.Log.d("DataManager", "Saved ${_babies.value.size} babies to WebDAV, result: $result")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to save babies", e)
                 }
@@ -337,7 +330,8 @@ object DataManager {
                 try {
                     val config = getWebDavConfig()
                     val json = Gson().toJson(_timeline.value)
-                    WebDavManager.writeJson(config, "$DATA_PATH/timeline.json", json)
+                    val result = WebDavManager.writeJson(config, "$DATA_PATH/timeline.json", json)
+                    android.util.Log.d("DataManager", "Saved ${_timeline.value.size} timeline records to WebDAV, result: $result")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to save timeline", e)
                 }
@@ -351,7 +345,8 @@ object DataManager {
                 try {
                     val config = getWebDavConfig()
                     val json = Gson().toJson(_photos.value)
-                    WebDavManager.writeJson(config, "$DATA_PATH/photos.json", json)
+                    val result = WebDavManager.writeJson(config, "$DATA_PATH/photos.json", json)
+                    android.util.Log.d("DataManager", "Saved ${_photos.value.size} photos to WebDAV, result: $result")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to save photos", e)
                 }
@@ -365,7 +360,8 @@ object DataManager {
                 try {
                     val config = getWebDavConfig()
                     val json = Gson().toJson(buildSettingsMap())
-                    WebDavManager.writeJson(config, "$DATA_PATH/settings.json", json)
+                    val result = WebDavManager.writeJson(config, "$DATA_PATH/settings.json", json)
+                    android.util.Log.d("DataManager", "Saved settings to WebDAV, result: $result")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to save settings", e)
                 }
@@ -379,7 +375,8 @@ object DataManager {
                 try {
                     val config = getWebDavConfig()
                     val json = Gson().toJson(_aiProfiles.value)
-                    WebDavManager.writeJson(config, "$DATA_PATH/ai_profiles.json", json)
+                    val result = WebDavManager.writeJson(config, "$DATA_PATH/ai_profiles.json", json)
+                    android.util.Log.d("DataManager", "Saved ${_aiProfiles.value.size} AI profiles to WebDAV, result: $result")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to save AI profiles", e)
                 }
@@ -483,6 +480,7 @@ object DataManager {
                     val data = localFile.readBytes()
                     val uploadResult = WebDavManager.uploadFile(config, "$MEDIA_PATH/$remoteName", data, mimeType)
                     if (uploadResult.isSuccess && uploadResult.getOrThrow()) {
+                        android.util.Log.d("DataManager", "Photo upload to WebDAV succeeded: $remoteName")
                         val remoteUrl = "http://${config.url}/$MEDIA_PATH/$remoteName".replace("//", "/").replace("http:/", "http://")
                         _photos.value = _photos.value.map {
                             if (it.id == p.id) it.copy(url = remoteUrl) else it
@@ -610,42 +608,6 @@ object DataManager {
         }
     }
 
-    fun uploadBackup(onProgress: (String) -> Unit, onComplete: (Result<Boolean>) -> Unit) {
-        val config = _webDavConfig.value ?: getWebDavConfig()
-        _isBackingUp.value = true
-        appScope.launch {
-            try {
-                onProgress("正在导出数据...")
-                val json = exportCurrentDataToJson()
-                if (json.isEmpty()) throw Exception("No data to export")
-                val jsonBytes = json.toByteArray(Charsets.UTF_8)
-
-                onProgress("正在打包...")
-                val zipBytes = createBackupZip(jsonBytes, activeBabyId)
-                if (zipBytes.isEmpty()) throw Exception("备份数据为空")
-
-                android.util.Log.d("DataManager", "Backup zip: ${zipBytes.size} bytes")
-
-                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss", java.util.Locale.getDefault())
-                    .format(java.util.Date())
-                val filename = "yueming-backup-${timestamp}.zip"
-
-                onProgress("正在上传到 WebDAV...")
-                val result = WebDavManager.uploadBackup(config, zipBytes, filename)
-
-                withContext(Dispatchers.Main) {
-                    _isBackingUp.value = false
-                    onComplete(result)
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _isBackingUp.value = false
-                    onComplete(Result.failure(e))
-                }
-            }
-        }
-    }
-
     private fun exportCurrentDataToJson(): String {
         val gson = Gson()
         val export = mapOf(
@@ -678,152 +640,6 @@ object DataManager {
             "settings" to buildSettingsMap()
         )
         return gson.toJson(export)
-    }
-
-    private suspend fun createBackupZip(jsonData: ByteArray, babyId: String): ByteArray = withContext(Dispatchers.IO) {
-        val baos = java.io.ByteArrayOutputStream()
-        ZipOutputStream(baos).use { zos ->
-            val jsonEntry = ZipEntry("database.json")
-            zos.putNextEntry(jsonEntry)
-            zos.write(jsonData)
-            zos.closeEntry()
-
-            val photosEntry = ZipEntry("photos/")
-            zos.putNextEntry(photosEntry)
-            zos.closeEntry()
-
-            val photoUrls = _photos.value.map { it.url }.filter { it.startsWith("content://") || it.startsWith("file://") }
-            if (photoUrls.isNotEmpty()) {
-                val photoListEntry = ZipEntry("photos/manifest.json")
-                zos.putNextEntry(photoListEntry)
-                zos.write(Gson().toJson(photoUrls).toByteArray(Charsets.UTF_8))
-                zos.closeEntry()
-            }
-
-            val videosEntry = ZipEntry("videos/")
-            zos.putNextEntry(videosEntry)
-            zos.closeEntry()
-        }
-        baos.toByteArray()
-    }
-
-    fun downloadBackup(filename: String, onProgress: (String) -> Unit, onComplete: (Result<ByteArray>) -> Unit) {
-        val config = _webDavConfig.value ?: getWebDavConfig()
-        appScope.launch {
-            onProgress("正在从 WebDAV 下载备份...")
-            val result = WebDavManager.downloadBackup(config, filename)
-            withContext(Dispatchers.Main) { onComplete(result) }
-        }
-    }
-
-    fun refreshBackupList(onResult: (Result<List<String>>) -> Unit) {
-        val config = _webDavConfig.value ?: getWebDavConfig()
-        appScope.launch {
-            val result = WebDavManager.listBackups(config)
-            result.onSuccess { _backupFiles.value = it }
-            withContext(Dispatchers.Main) { onResult(result) }
-        }
-    }
-
-    fun restoreFromBackup(bytes: ByteArray, onComplete: (Boolean) -> Unit) {
-        appScope.launch {
-            try {
-                val jsonStr = extractJsonFromZip(bytes)
-                if (jsonStr != null) {
-                    val gson = Gson()
-                    val map = gson.fromJson(jsonStr, Map::class.java) ?: run {
-                        withContext(Dispatchers.Main) { onComplete(false) }
-                        return@launch
-                    }
-
-                    // Import babies
-                    val babiesList = map["baby"] as? List<*>
-                    val activeBabyId = map["activeBabyId"] as? String
-                    if (babiesList != null) {
-                        val newBabies = mutableListOf<BabyInfo>()
-                        babiesList.forEach { item ->
-                            val m = item as? Map<*, *> ?: return@forEach
-                            val bid = (m["id"] as? String) ?: java.util.UUID.randomUUID().toString()
-                            val baby = BabyInfo(
-                                id = bid,
-                                name = m["name"] as? String ?: "",
-                                nickname = m["nickname"] as? String ?: "",
-                                birthDate = m["birthDate"] as? String ?: "",
-                                gender = m["gender"] as? String ?: "girl",
-                                avatar = m["avatarUri"] as? String
-                            )
-                            newBabies.add(baby)
-                        }
-                        _babies.value = newBabies
-                        val active = newBabies.find { it.id == activeBabyId } ?: newBabies.firstOrNull()
-                        if (active != null) _activeBaby.value = active
-                        saveBabies()
-                    }
-
-                    // Import timeline
-                    val timelineList = map["timeline"] as? List<*>
-                    if (timelineList != null) {
-                        val newTimeline = mutableListOf<TimelineRecord>()
-                        timelineList.mapNotNull { item ->
-                            val m = item as? Map<*, *> ?: return@mapNotNull null
-                            TimelineRecord(
-                                id = m["id"] as? String ?: "",
-                                babyId = m["babyId"] as? String ?: "",
-                                date = m["date"] as? String ?: "",
-                                title = m["title"] as? String ?: "",
-                                description = m["description"] as? String ?: "",
-                                category = m["category"] as? String ?: "other",
-                                tags = (m["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                                photos = (m["photos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                                videos = (m["videos"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                            )
-                        }.forEach { newTimeline.add(it) }
-                        _timeline.value = newTimeline
-                        saveTimeline()
-                    }
-
-                    // Import photos
-                    val photosList = map["photos"] as? List<*>
-                    if (photosList != null) {
-                        val newPhotos = mutableListOf<PhotoEntry>()
-                        photosList.mapNotNull { item ->
-                            val m = item as? Map<*, *> ?: return@mapNotNull null
-                            PhotoEntry(
-                                id = m["id"] as? String ?: "",
-                                babyId = m["babyId"] as? String ?: "",
-                                url = m["url"] as? String ?: "",
-                                caption = m["caption"] as? String ?: "",
-                                date = m["date"] as? String ?: "",
-                                timelineRecordId = m["timelineRecordId"] as? String,
-                                tags = (m["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                            )
-                        }.forEach { newPhotos.add(it) }
-                        _photos.value = newPhotos
-                        savePhotos()
-                    }
-
-                    withContext(Dispatchers.Main) { onComplete(true) }
-                } else {
-                    withContext(Dispatchers.Main) { onComplete(false) }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { onComplete(false) }
-            }
-        }
-    }
-
-    private fun extractJsonFromZip(zipBytes: ByteArray): String? {
-        return try {
-            val zis = java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(zipBytes))
-            var entry = zis.nextEntry
-            while (entry != null) {
-                if (entry.name == "database.json") {
-                    return zis.readBytes().toString(Charsets.UTF_8)
-                }
-                entry = zis.nextEntry
-            }
-            null
-        } catch (e: Exception) { null }
     }
 
     // --- Export / Import ---
