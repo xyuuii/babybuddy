@@ -470,7 +470,7 @@ fun PhotosScreen() {
                         if (isVideo) {
                             VideoPlayerDialog(
                                 videoPath = photo.url,
-                                onDismiss = {}
+                                onDismiss = { viewerVisible = false }
                             )
                         } else {
                             AuthenticatedAsyncImage(
