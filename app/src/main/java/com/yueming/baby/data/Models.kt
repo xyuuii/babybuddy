@@ -97,7 +97,7 @@ data class AIProfile(
     val systemPrompt: String = "你是一个专业的育儿助手，基于宝宝数据提供科学、温暖的育儿建议。",
     val temperature: Float = 0.7f,
     val topP: Float = 0.9f,
-    val maxTokens: Int = 2048,
+    val maxTokens: Int = 32768,
     val isActive: Boolean = false
 )
 

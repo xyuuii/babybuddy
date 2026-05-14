@@ -820,7 +820,7 @@ object DataManager {
         if (baby.id.isEmpty()) return ""
         val age = getAgeInMonths(baby.birthDate)
         val ageDays = getAgeInDays(baby.birthDate)
-        val recentRecords = _timeline.value.takeLast(5).joinToString("\n") { 
+        val allRecords = _timeline.value.joinToString("\n") { 
             "- ${it.date} | ${it.category}: ${it.title}" + if (it.description.isNotEmpty()) " - ${it.description}" else ""
         }
         return """
@@ -830,7 +830,7 @@ object DataManager {
 - 出生日期：${baby.birthDate}
 - 月龄：${age}个月
 - 日龄：${ageDays}天
-${if (recentRecords.isNotEmpty()) "\n最近5条记录：\n$recentRecords" else ""}
+${if (allRecords.isNotEmpty()) "\n全部成长记录（${_timeline.value.size}条）：\n$allRecords" else ""}
 """.trim()
     }
 
