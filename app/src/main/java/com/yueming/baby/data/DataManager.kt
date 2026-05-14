@@ -15,6 +15,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
 import okhttp3.MediaType.Companion.toMediaType
+import okio.IOException
 
 object DataManager {
     data class MediaUploadEvent(
@@ -809,24 +810,50 @@ object DataManager {
     // --- Chat ---
     fun addMessage(msg: ChatMessage) {
         _chatMessages.value = (_chatMessages.value + msg).toMutableList()
-        // Auto-send to AI if user message
         if (msg.role == "user") {
-            sendToAI(msg.content)
+            sendToAIStreaming(msg.content)
         }
     }
 
-    private fun sendToAI(userInput: String) {
-        val profile = activeAIProfile ?: return
-        val systemPrompt = profile.systemPrompt.ifBlank { "你是一个专业的育儿助手。" }
+    private fun buildBabyContext(): String {
+        val baby = _activeBaby.value
+        if (baby.id.isEmpty()) return ""
+        val age = getAgeInMonths(baby.birthDate)
+        val ageDays = getAgeInDays(baby.birthDate)
+        val recentRecords = _timeline.value.takeLast(5).joinToString("\n") { 
+            "- ${it.date} | ${it.category}: ${it.title}" + if (it.description.isNotEmpty()) " - ${it.description}" else ""
+        }
+        return """
+当前宝宝信息：
+- 名字：${baby.name}（${baby.nickname}）
+- 性别：${if (baby.gender == "boy") "男孩" else "女孩"}
+- 出生日期：${baby.birthDate}
+- 月龄：${age}个月
+- 日龄：${ageDays}天
+${if (recentRecords.isNotEmpty()) "\n最近5条记录：\n$recentRecords" else ""}
+""".trim()
+    }
 
-        // Build messages array (system + history + user)
+    private fun sendToAIStreaming(userInput: String) {
+        val profile = activeAIProfile ?: return
+        val babyContext = buildBabyContext()
+        val systemPrompt = buildString {
+            append(profile.systemPrompt.ifBlank { "你是一个专业的育儿助手。" })
+            if (babyContext.isNotEmpty()) {
+                append("\n\n$babyContext")
+            }
+        }
+
         val historyMessages = _chatMessages.value
-            .filter { it.role == "user" || it.role == "assistant" }
+            .filter { it.role in listOf("user", "assistant") }
+            .dropLast(1)  // exclude the just-added user message
             .map { mapOf("role" to it.role, "content" to it.content) }
 
         val messages = listOf(
             mapOf("role" to "system", "content" to systemPrompt)
-        ) + historyMessages
+        ) + historyMessages + listOf(
+            mapOf("role" to "user", "content" to userInput)
+        )
 
         val requestBody = mapOf(
             "model" to profile.model,
@@ -834,14 +861,20 @@ object DataManager {
             "temperature" to profile.temperature.toDouble(),
             "top_p" to profile.topP.toDouble(),
             "max_tokens" to profile.maxTokens,
-            "stream" to false
+            "stream" to true
         )
 
+        val aiMsgId = "msg-${System.currentTimeMillis()}"
+        _chatMessages.value = (_chatMessages.value + ChatMessage(
+            id = aiMsgId, role = "assistant", content = "", timestamp = System.currentTimeMillis()
+        )).toMutableList()
+
         appScope.launch {
+            var fullContent = ""
             try {
                 val client = okhttp3.OkHttpClient.Builder()
                     .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
 
                 val request = okhttp3.Request.Builder()
@@ -849,56 +882,53 @@ object DataManager {
                     .header("Authorization", "Bearer ${profile.apiKey}")
                     .header("Content-Type", "application/json")
                     .post(okhttp3.RequestBody.create(
-                        "application/json".toMediaType(),
-                        Gson().toJson(requestBody)
+                        "application/json".toMediaType(), Gson().toJson(requestBody)
                     ))
                     .build()
 
                 val response = client.newCall(request).execute()
-                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    updateAiMessage(aiMsgId, "请求失败 (HTTP ${response.code})")
+                    return@launch
+                }
 
-                if (response.isSuccessful) {
-                    val reply = extractContent(body)
-                    val aiMsg = ChatMessage(
-                        id = "msg-${System.currentTimeMillis()}",
-                        role = "assistant",
-                        content = reply,
-                        timestamp = System.currentTimeMillis()
-                    )
-                    _chatMessages.value = (_chatMessages.value + aiMsg).toMutableList()
-                } else {
-                    android.util.Log.e("DataManager", "AI chat failed: HTTP ${response.code}, body: $body")
-                    val errorMsg = ChatMessage(
-                        id = "msg-${System.currentTimeMillis()}",
-                        role = "assistant",
-                        content = "抱歉，请求失败 (HTTP ${response.code})。请检查 API 配置。",
-                        timestamp = System.currentTimeMillis()
-                    )
-                    _chatMessages.value = (_chatMessages.value + errorMsg).toMutableList()
+                val body = response.body ?: run {
+                    updateAiMessage(aiMsgId, "响应为空")
+                    return@launch
+                }
+
+                body.source().use { source ->
+                    while (!source.exhausted()) {
+                        val line = source.readUtf8Line() ?: continue
+                        if (!line.startsWith("data: ")) continue
+                        val data = line.removePrefix("data: ").trim()
+                        if (data == "[DONE]") break
+                        if (data.isEmpty()) continue
+
+                        try {
+                            val delta = Gson().fromJson(data, Map::class.java)
+                            val choices = delta["choices"] as? List<*> ?: continue
+                            val first = choices.firstOrNull() as? Map<*, *> ?: continue
+                            val delta2 = first["delta"] as? Map<*, *> ?: continue
+                            val content = delta2["content"]?.toString() ?: ""
+                            if (content.isNotEmpty()) {
+                                fullContent += content
+                                updateAiMessage(aiMsgId, fullContent)
+                            }
+                        } catch (_: Exception) { }
+                    }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("DataManager", "AI chat error", e)
-                val errorMsg = ChatMessage(
-                    id = "msg-${System.currentTimeMillis()}",
-                    role = "assistant",
-                    content = "抱歉，连接失败：${e.message}",
-                    timestamp = System.currentTimeMillis()
-                )
-                _chatMessages.value = (_chatMessages.value + errorMsg).toMutableList()
+                android.util.Log.e("DataManager", "AI stream error", e)
+                updateAiMessage(aiMsgId, "连接失败: ${e.message}")
             }
         }
     }
 
-    private fun extractContent(json: String): String {
-        return try {
-            val obj = Gson().fromJson(json, Map::class.java)
-            val choices = obj["choices"] as? List<*> ?: return json.take(200)
-            val first = choices.firstOrNull() as? Map<*, *> ?: return json.take(200)
-            val message = first["message"] as? Map<*, *> ?: return json.take(200)
-            message["content"]?.toString() ?: json.take(200)
-        } catch (e: Exception) {
-            json.take(200)
-        }
+    private fun updateAiMessage(id: String, content: String) {
+        _chatMessages.value = _chatMessages.value.map {
+            if (it.id == id) it.copy(content = content) else it
+        }.toMutableList()
     }
 
     fun clearMessages() { _chatMessages.value = emptyList() }
