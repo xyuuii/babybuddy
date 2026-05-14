@@ -10,13 +10,9 @@ import com.yueming.baby.data.dao.*
 import com.yueming.baby.data.entity.*
 import com.google.gson.Gson
 
-@Deprecated(
-    message = "Room database has been replaced by WebDAV cloud backend (DataManager).",
-    replaceWith = ReplaceWith("DataManager", "com.yueming.baby.data.DataManager")
-)
 @Database(
     entities = [TimelineEntity::class, PhotoEntity::class, BabyEntity::class, SettingsEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +32,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN mediaType TEXT NOT NULL DEFAULT 'photo'")
+                db.execSQL("ALTER TABLE photos ADD COLUMN remoteUrl TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN remotePath TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localOriginalPath TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localThumbPath TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN localPreviewPath TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN uploadStatus TEXT NOT NULL DEFAULT 'SYNCED'")
+                db.execSQL("ALTER TABLE photos ADD COLUMN sha256 TEXT")
+                db.execSQL("ALTER TABLE photos ADD COLUMN createdAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photos ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -44,6 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "yueming.db"
                 )
                     .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }

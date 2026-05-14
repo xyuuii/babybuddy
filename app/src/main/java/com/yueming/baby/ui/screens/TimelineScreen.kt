@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.Instant
@@ -200,7 +200,7 @@ fun TimelineScreen() {
                                                         shape = RoundedCornerShape(10.dp),
                                                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                                                     ) {
-                                                        AsyncImage(model = url, contentDescription = null,
+                                                        AuthenticatedAsyncImage(model = url, contentDescription = null,
                                                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                                     }
                                                 }
@@ -499,7 +499,7 @@ private fun AddRecordDialog(
                 items(selectedPhotos.size) { index ->
                     val uri = selectedPhotos[index]
                     Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))) {
-                        AsyncImage(model = uri, contentDescription = null,
+                        AuthenticatedAsyncImage(model = uri, contentDescription = null,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         IconButton(
                             onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },

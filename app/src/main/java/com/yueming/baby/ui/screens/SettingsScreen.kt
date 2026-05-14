@@ -30,11 +30,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.yueming.baby.data.*
 import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
+import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -395,7 +395,7 @@ private fun BabyInfoSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     if (form.avatar != null) {
-                        AsyncImage(model = form.avatar, contentDescription = null,
+                        AuthenticatedAsyncImage(model = form.avatar, contentDescription = null,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
                         Icon(Icons.Default.Person, null, Modifier.size(36.dp), tint = Color.White)

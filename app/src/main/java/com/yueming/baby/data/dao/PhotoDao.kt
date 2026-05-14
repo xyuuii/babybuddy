@@ -36,6 +36,9 @@ interface PhotoDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(photos: List<PhotoEntity>)
 
+    @Query("DELETE FROM photos")
+    suspend fun deleteAll()
+
     @Query("SELECT COUNT(*) FROM photos")
     suspend fun count(): Int
 

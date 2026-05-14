@@ -2,8 +2,10 @@ package com.yueming.baby.ui.components
 
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,17 +17,28 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yueming.baby.data.DataManager
+import com.yueming.baby.data.cloud.CloudStorageConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private data class VideoThumbnailResult(
+    val bitmap: Bitmap?,
+    val durationMs: Long
+)
 
 @Composable
 fun VideoThumbnail(
@@ -35,18 +48,24 @@ fun VideoThumbnail(
     onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val cloudConfig by DataManager.cloudStorageConfig.collectAsState()
 
-    val (bitmap, durationMs) = remember(filePath) {
-        try {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(filePath)
-            val bmp = retriever.frameAtTime
-            val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                ?.toLongOrNull() ?: 0L
-            retriever.release()
-            Pair(bmp, dur)
-        } catch (e: Exception) {
-            Pair(null, 0L)
+    val thumbnail by produceState(
+        initialValue = VideoThumbnailResult(bitmap = null, durationMs = 0L),
+        key1 = filePath,
+        key2 = cloudConfig
+    ) {
+        value = withContext(Dispatchers.IO) {
+            loadVideoThumbnail(context.applicationContext, filePath, cloudConfig)
+        }
+    }
+
+    val bitmap = thumbnail.bitmap
+    val durationMs = thumbnail.durationMs
+
+    DisposableEffect(bitmap) {
+        onDispose {
+            bitmap?.recycle()
         }
     }
 
@@ -124,5 +143,34 @@ fun VideoThumbnail(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
             )
         }
+    }
+}
+
+private fun loadVideoThumbnail(
+    context: android.content.Context,
+    filePath: String,
+    cloudConfig: CloudStorageConfig
+): VideoThumbnailResult {
+    val uri = Uri.parse(filePath)
+    val retriever = MediaMetadataRetriever()
+    return try {
+        when (uri.scheme) {
+            "content", "android.resource" -> retriever.setDataSource(context, uri)
+            "http", "https" -> retriever.setDataSource(filePath, webDavAuthHeadersFor(filePath, cloudConfig))
+            else -> retriever.setDataSource(filePath)
+        }
+        val bmp = retriever.getScaledFrameAtTime(
+            -1,
+            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+            320,
+            320
+        )
+        val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            ?.toLongOrNull() ?: 0L
+        VideoThumbnailResult(bmp, dur)
+    } catch (_: Exception) {
+        VideoThumbnailResult(bitmap = null, durationMs = 0L)
+    } finally {
+        runCatching { retriever.release() }
     }
 }

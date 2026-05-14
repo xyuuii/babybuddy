@@ -5,6 +5,32 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+fun CloudStorageConfig.toWebDavConfig(): WebDavManager.WebDavConfig {
+    return WebDavManager.WebDavConfig(
+        url = buildWebDavBaseUrl(),
+        username = username,
+        password = password,
+        dataPath = webdavPath
+    )
+}
+
+fun CloudStorageConfig.buildWebDavBaseUrl(): String {
+    val rawHost = host.trim().trimEnd('/')
+    if (rawHost.startsWith("http://", ignoreCase = true) ||
+        rawHost.startsWith("https://", ignoreCase = true)
+    ) {
+        return rawHost
+    }
+
+    val hostWithPort = when {
+        rawHost.startsWith("[") -> rawHost
+        rawHost.count { it == ':' } == 1 && rawHost.substringAfterLast(':').all { it.isDigit() } -> rawHost
+        rawHost.contains(":") -> "[$rawHost]"
+        else -> "$rawHost:$port"
+    }
+    return "http://$hostWithPort"
+}
+
 object CloudManager {
     data class UploadResult(
         val success: Boolean,
@@ -19,13 +45,7 @@ object CloudManager {
         }
         when (config.protocol) {
             StorageProtocol.WEBDAV -> {
-                val wdConfig = WebDavManager.WebDavConfig(
-                    url = "${config.host}:${config.port}",
-                    username = config.username,
-                    password = config.password,
-                    dataPath = config.webdavPath
-                )
-                val data = localFile.readBytes()
+                val wdConfig = config.toWebDavConfig()
                 val mimeType = when (localFile.extension.lowercase()) {
                     "mp4" -> "video/mp4"
                     "webm" -> "video/webm"
@@ -34,7 +54,7 @@ object CloudManager {
                     else -> "application/octet-stream"
                 }
                 val fullRemotePath = "${config.webdavPath.trimEnd('/')}/media/$remoteName"
-                val result = WebDavManager.uploadFile(wdConfig, fullRemotePath, data, mimeType)
+                val result = WebDavManager.uploadFile(wdConfig, fullRemotePath, localFile, mimeType)
                 result.fold(
                     onSuccess = {
                         UploadResult(true, fullRemotePath)
@@ -65,12 +85,7 @@ object CloudManager {
             localFile.parentFile?.mkdirs()
             when (config.protocol) {
                 StorageProtocol.WEBDAV -> {
-                    val wdConfig = WebDavManager.WebDavConfig(
-                        url = "${config.host}:${config.port}",
-                        username = config.username,
-                        password = config.password,
-                        dataPath = config.webdavPath
-                    )
+                    val wdConfig = config.toWebDavConfig()
                     // Read file content via readJson (it's just a GET request)
                     val result = WebDavManager.readJson(wdConfig, remotePath)
                     result.fold(
@@ -96,8 +111,7 @@ object CloudManager {
     fun getPublicUrl(remotePath: String, config: CloudStorageConfig): String {
         return when (config.protocol) {
             StorageProtocol.WEBDAV -> {
-                val scheme = "http"
-                "$scheme://${config.host}:${config.port}$remotePath"
+                "${config.buildWebDavBaseUrl().trimEnd('/')}/${remotePath.trimStart('/')}"
             }
             StorageProtocol.SMB, StorageProtocol.FTP -> {
                 remotePath
@@ -120,12 +134,7 @@ object CloudManager {
     suspend fun testConnection(config: CloudStorageConfig): Result<Boolean> = withContext(Dispatchers.IO) {
         when (config.protocol) {
             StorageProtocol.WEBDAV -> {
-                val wdConfig = WebDavManager.WebDavConfig(
-                    url = "${config.host}:${config.port}",
-                    username = config.username,
-                    password = config.password,
-                    dataPath = config.webdavPath
-                )
+                val wdConfig = config.toWebDavConfig()
                 val result = WebDavManager.testConnection(config = wdConfig)
                 result.fold(
                     onSuccess = { testResult -> Result.success(testResult.success) },

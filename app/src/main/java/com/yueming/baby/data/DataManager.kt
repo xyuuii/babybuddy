@@ -5,21 +5,35 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.CloudStorageConfig
+import com.yueming.baby.data.cloud.toWebDavConfig
+import com.yueming.baby.data.entity.PhotoEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 
 object DataManager {
+    data class MediaUploadEvent(
+        val photoId: String,
+        val success: Boolean,
+        val message: String,
+        val remoteUrl: String? = null
+    )
+
     private var appContext: Context? = null
+    private var database: AppDatabase? = null
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val writeMutex = Mutex()
 
     // Data paths
     private const val DATA_PATH = "/sata1-15529232180/yueming/data"
     private const val MEDIA_PATH = "/sata1-15529232180/yueming/media"
+    private const val LOCAL_CONFIG_PREFS = "yueming_local_storage_config"
+    private const val KEY_CLOUD_STORAGE_CONFIG = "cloud_storage_config"
+    private const val KEY_WEBDAV_CONFIG = "webdav_config"
 
     // --- Photo cache helper (copy content URI to temp for upload) ---
     fun copyPhotoToInternalStorage(uri: android.net.Uri): String? {
@@ -64,6 +78,9 @@ object DataManager {
     }
 
     // --- StateFlows ---
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val _babies = MutableStateFlow<List<BabyInfo>>(emptyList())
     val babies: StateFlow<List<BabyInfo>> = _babies.asStateFlow()
 
@@ -104,6 +121,8 @@ object DataManager {
     // Cloud storage config
     private val _cloudStorageConfig = MutableStateFlow(CloudStorageConfig())
     val cloudStorageConfig: StateFlow<CloudStorageConfig> = _cloudStorageConfig.asStateFlow()
+    private val _mediaUploadEvents = MutableSharedFlow<MediaUploadEvent>(extraBufferCapacity = 16)
+    val mediaUploadEvents: SharedFlow<MediaUploadEvent> = _mediaUploadEvents.asSharedFlow()
 
     // Legacy WebDAV state (forward-compat)
     private val _webDavConfig = MutableStateFlow<WebDavManager.WebDavConfig?>(null)
@@ -114,22 +133,67 @@ object DataManager {
         val wd = _webDavConfig.value
         if (wd != null) return wd
         val cs = _cloudStorageConfig.value
-        val hostUrl = if (cs.host.startsWith("http")) cs.host else "http://${cs.host}"
-        return WebDavManager.WebDavConfig(
-            url = "$hostUrl:${cs.port}",
-            username = cs.username,
-            password = cs.password,
-            dataPath = cs.webdavPath
-        )
+        return cs.toWebDavConfig()
+    }
+
+    private fun loadLocalStorageConfig() {
+        val context = appContext ?: return
+        val prefs = context.getSharedPreferences(LOCAL_CONFIG_PREFS, Context.MODE_PRIVATE)
+        val gson = Gson()
+        prefs.getString(KEY_CLOUD_STORAGE_CONFIG, null)?.let { json ->
+            runCatching {
+                gson.fromJson(json, CloudStorageConfig::class.java)
+            }.getOrNull()?.let { _cloudStorageConfig.value = it }
+        }
+        prefs.getString(KEY_WEBDAV_CONFIG, null)?.let { json ->
+            runCatching {
+                gson.fromJson(json, WebDavManager.WebDavConfig::class.java)
+            }.getOrNull()?.let { _webDavConfig.value = it }
+        }
+    }
+
+    private fun saveLocalStorageConfig() {
+        val context = appContext ?: return
+        val gson = Gson()
+        context.getSharedPreferences(LOCAL_CONFIG_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_CLOUD_STORAGE_CONFIG, gson.toJson(_cloudStorageConfig.value))
+            .apply {
+                val webDavConfig = _webDavConfig.value
+                if (webDavConfig == null) remove(KEY_WEBDAV_CONFIG)
+                else putString(KEY_WEBDAV_CONFIG, gson.toJson(webDavConfig))
+            }
+            .apply()
     }
 
     // --- Initialization ---
     fun init(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        android.util.Log.d("DataManager", "Initializing with WebDAV backend")
+        database = AppDatabase.getInstance(context.applicationContext)
+        loadLocalStorageConfig()
+        android.util.Log.d("DataManager", "Initializing with local media index + WebDAV backend")
         appScope.launch {
-            initWebDavData()
+            _isLoading.value = true
+            try {
+                loadLocalMediaIndex()
+                initWebDavData()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun loadLocalMediaIndex() {
+        val db = database ?: return
+        try {
+            val localPhotos = db.photoDao().getAllOnce().map { it.toPhotoEntry() }
+            if (localPhotos.isNotEmpty()) {
+                _photos.value = localPhotos
+                android.util.Log.d("DataManager", "Loaded ${localPhotos.size} media items from local Room index")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DataManager", "Failed to load local media index", e)
         }
     }
 
@@ -141,6 +205,7 @@ object DataManager {
         WebDavManager.createDirectoryChain(config, DATA_PATH)
         WebDavManager.createDirectoryChain(config, "$MEDIA_PATH/photos")
         WebDavManager.createDirectoryChain(config, "$MEDIA_PATH/videos")
+        uploadPendingMedia(config)
 
         // Load settings first (contains activeBabyId, theme, etc.)
         loadSettingsFromWebDav(config)
@@ -211,17 +276,27 @@ object DataManager {
                     val type = object : TypeToken<List<PhotoEntry>>() {}.type
                     val list: List<PhotoEntry> = Gson().fromJson(json, type)
                     _photos.value = list
+                    upsertPhotoIndex(list.map { it.toPhotoEntity(uploadStatus = "SYNCED") })
                     android.util.Log.d("DataManager", "Loaded ${list.size} photos from WebDAV")
                 } catch (e: Exception) {
                     android.util.Log.e("DataManager", "Failed to parse photos.json", e)
-                    _photos.value = emptyList()
+                    if (_photos.value.isEmpty()) _photos.value = emptyList()
                 }
             },
             onFailure = {
                 android.util.Log.i("DataManager", "photos.json not found, starting fresh")
-                _photos.value = emptyList()
+                if (_photos.value.isEmpty()) _photos.value = emptyList()
             }
         )
+    }
+
+    private suspend fun upsertPhotoIndex(entities: List<PhotoEntity>) {
+        if (entities.isEmpty()) return
+        try {
+            database?.photoDao()?.insertAll(entities)
+        } catch (e: Exception) {
+            android.util.Log.e("DataManager", "Failed to upsert local media index", e)
+        }
     }
 
     private suspend fun loadSettingsFromWebDav(config: WebDavManager.WebDavConfig) {
@@ -389,6 +464,8 @@ object DataManager {
     // --- Cloud Storage Config ---
     fun saveCloudStorageConfig(config: CloudStorageConfig) {
         _cloudStorageConfig.value = config
+        _webDavConfig.value = null
+        saveLocalStorageConfig()
         saveSettings()
     }
 
@@ -463,43 +540,140 @@ object DataManager {
     fun addPhoto(photo: PhotoEntry) {
         val p = if (photo.babyId.isEmpty()) photo.copy(babyId = _activeBaby.value.id) else photo
         _photos.value = (listOf(p) + _photos.value).toMutableList()
+        appScope.launch {
+            val localFile = File(p.url)
+            database?.photoDao()?.insert(
+                p.toPhotoEntity(
+                    localOriginalPath = p.url.takeIf { localFile.exists() },
+                    uploadStatus = if (localFile.exists()) "PENDING_UPLOAD" else "SYNCED",
+                    sha256 = localFile.takeIf { it.exists() }?.sha256()
+                )
+            )
+        }
         savePhotos()
 
-        // Upload media file to WebDAV if it's a local file
         appScope.launch {
             val localFile = File(p.url)
             if (localFile.exists()) {
-                try {
-                    val config = getWebDavConfig()
-                    val ext = p.url.substringAfterLast(".", "jpg")
-                    val remoteName = "photos/${p.id}.$ext"
-                    val mimeType = when (ext.lowercase()) {
-                        "mp4" -> "video/mp4"
-                        "webm" -> "video/webm"
-                        "png" -> "image/png"
-                        else -> "image/jpeg"
-                    }
-                    val data = localFile.readBytes()
-                    val uploadResult = WebDavManager.uploadFile(config, "$MEDIA_PATH/$remoteName", data, mimeType)
-                    if (uploadResult.isSuccess && uploadResult.getOrThrow()) {
-                        android.util.Log.d("DataManager", "Photo upload to WebDAV succeeded: $remoteName")
-                        // config.url already includes scheme (e.g., http://192.168.0.28:5005)
-                        val baseUrl = config.url.trimEnd('/')
-                        val remoteUrl = "$baseUrl/$MEDIA_PATH/$remoteName".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
-                        _photos.value = _photos.value.map {
-                            if (it.id == p.id) it.copy(url = remoteUrl) else it
-                        }.toMutableList()
-                        savePhotos()
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("DataManager", "Failed to upload photo to WebDAV", e)
-                }
+                uploadLocalMedia(p, localFile, getWebDavConfig())
             }
         }
     }
 
+    private suspend fun uploadPendingMedia(config: WebDavManager.WebDavConfig) {
+        val pending = database?.photoDao()?.getAllOnce()
+            ?.filter { it.uploadStatus != "SYNCED" && !it.localOriginalPath.isNullOrBlank() }
+            ?: return
+        pending.forEach { entity ->
+            val localFile = File(entity.localOriginalPath ?: return@forEach)
+            if (localFile.exists()) {
+                uploadLocalMedia(entity.toPhotoEntry(), localFile, config)
+            }
+        }
+    }
+
+    private suspend fun uploadLocalMedia(
+        photo: PhotoEntry,
+        localFile: File,
+        config: WebDavManager.WebDavConfig
+    ) {
+        try {
+            val ext = localFile.extension.ifBlank { photo.url.substringAfterLast(".", "jpg") }
+            val mediaFolder = if (photo.tags.any { it == "视频" || it.equals("video", ignoreCase = true) }) "videos" else "photos"
+            val remoteName = "$mediaFolder/${photo.id}.$ext"
+            val mimeType = when (ext.lowercase()) {
+                "mp4" -> "video/mp4"
+                "webm" -> "video/webm"
+                "png" -> "image/png"
+                else -> "image/jpeg"
+            }
+            val remotePath = "${mediaRootPath(config)}/$remoteName"
+            val uploadSucceeded = WebDavManager.uploadFile(config, remotePath, localFile, mimeType).getOrThrow()
+            if (!uploadSucceeded) {
+                markMediaUploadFailed(photo, localFile, "NAS 上传失败：服务器没有接受文件")
+                return
+            }
+
+            val verification = WebDavManager.verifyUploadedFile(config, remotePath, localFile.length()).getOrThrow()
+            if (!verification.exists || !verification.sizeMatches) {
+                val detail = verification.message.ifBlank { "远端文件不存在或大小不一致" }
+                markMediaUploadFailed(photo, localFile, "NAS 上传后验证失败：$detail")
+                return
+            }
+
+            run {
+                val baseUrl = config.url.trimEnd('/')
+                val remoteUrl = "$baseUrl/$remotePath".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
+                _photos.value = _photos.value.map {
+                    if (it.id == photo.id) it.copy(url = remoteUrl) else it
+                }.toMutableList()
+                database?.photoDao()?.insert(
+                    photo.copy(url = remoteUrl).toPhotoEntity(
+                        remoteUrl = remoteUrl,
+                        remotePath = remotePath,
+                        localOriginalPath = localFile.absolutePath,
+                        uploadStatus = "SYNCED",
+                        sha256 = localFile.sha256()
+                    )
+                )
+                savePhotos()
+                val successMessage = "已上传并验证：$remoteName"
+                _mediaUploadEvents.emit(MediaUploadEvent(photo.id, true, successMessage, remoteUrl))
+                android.util.Log.d("DataManager", "Media upload to WebDAV succeeded and verified: $remoteName")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DataManager", "Failed to upload media to WebDAV", e)
+            markMediaUploadFailed(photo, localFile, "NAS 上传失败：${e.message ?: "未知错误"}")
+        }
+    }
+
+    private suspend fun markMediaUploadFailed(photo: PhotoEntry, localFile: File, message: String) {
+        database?.photoDao()?.insert(
+            photo.toPhotoEntity(
+                localOriginalPath = localFile.absolutePath,
+                uploadStatus = "UPLOAD_FAILED",
+                sha256 = localFile.takeIf { it.exists() }?.sha256()
+            )
+        )
+        _mediaUploadEvents.emit(MediaUploadEvent(photo.id, false, message))
+        android.util.Log.e("DataManager", message)
+    }
+
+    private fun mediaRootPath(config: WebDavManager.WebDavConfig): String {
+        val configuredPath = config.dataPath.trim().trimEnd('/').ifBlank { DATA_PATH }
+        val rootPath = if (configuredPath.endsWith("/data")) {
+            configuredPath.removeSuffix("/data")
+        } else {
+            configuredPath
+        }
+        return "${rootPath.trimEnd('/')}/media"
+    }
+
     fun deletePhoto(id: String) {
         _photos.value = _photos.value.filter { it.id != id }.toMutableList()
+        appScope.launch {
+            database?.photoDao()?.deleteById(id)
+        }
+        savePhotos()
+    }
+
+    fun deletePhotos(ids: Set<String>) {
+        _photos.value = _photos.value.filter { it.id !in ids }.toMutableList()
+        appScope.launch {
+            ids.forEach { id -> database?.photoDao()?.deleteById(id) }
+        }
+        savePhotos()
+    }
+
+    fun updatePhoto(id: String, caption: String? = null, date: String? = null) {
+        _photos.value = _photos.value.map {
+            if (it.id == id) {
+                var p = it
+                if (caption != null) p = p.copy(caption = caption)
+                if (date != null) p = p.copy(date = date)
+                p
+            } else it
+        }.toMutableList()
         savePhotos()
     }
 
@@ -615,11 +789,13 @@ object DataManager {
     // --- WebDAV ---
     fun saveWebDavConfig(config: WebDavManager.WebDavConfig) {
         _webDavConfig.value = config
+        saveLocalStorageConfig()
         saveSettings()
     }
 
     fun clearWebDavConfig() {
         _webDavConfig.value = null
+        saveLocalStorageConfig()
         saveSettings()
     }
 
@@ -723,6 +899,7 @@ object DataManager {
             savePhotos()
             saveSettings()
             saveAiProfiles()
+            database?.photoDao()?.deleteAll()
             withContext(Dispatchers.Main) { onComplete() }
         }
     }
@@ -769,5 +946,67 @@ object DataManager {
             hour < 18 -> "下午好"
             else -> "晚上好"
         }
+    }
+
+    private fun PhotoEntry.toPhotoEntity(
+        remoteUrl: String? = null,
+        remotePath: String? = null,
+        localOriginalPath: String? = null,
+        localThumbPath: String? = null,
+        localPreviewPath: String? = null,
+        uploadStatus: String = "SYNCED",
+        sha256: String? = null
+    ): PhotoEntity {
+        val now = System.currentTimeMillis()
+        val resolvedRemoteUrl = remoteUrl ?: url.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        return PhotoEntity(
+            id = id,
+            babyId = babyId,
+            url = url,
+            caption = caption,
+            date = date,
+            timelineRecordId = timelineRecordId,
+            tags = Gson().toJson(tags),
+            mediaType = if (tags.any { it == "视频" || it.equals("video", ignoreCase = true) }) "video" else "photo",
+            remoteUrl = resolvedRemoteUrl,
+            remotePath = remotePath,
+            localOriginalPath = localOriginalPath,
+            localThumbPath = localThumbPath,
+            localPreviewPath = localPreviewPath,
+            uploadStatus = uploadStatus,
+            sha256 = sha256,
+            createdAt = now,
+            updatedAt = now
+        )
+    }
+
+    private fun PhotoEntity.toPhotoEntry(): PhotoEntry {
+        val tagList = try {
+            Gson().fromJson<List<String>>(tags, object : TypeToken<List<String>>() {}.type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return PhotoEntry(
+            id = id,
+            babyId = babyId,
+            url = remoteUrl ?: url,
+            caption = caption,
+            date = date,
+            timelineRecordId = timelineRecordId,
+            tags = if (mediaType == "video" && tagList.none { it == "视频" }) tagList + "视频" else tagList
+        )
+    }
+
+    private fun File.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

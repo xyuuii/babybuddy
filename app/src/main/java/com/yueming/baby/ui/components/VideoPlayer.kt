@@ -1,6 +1,7 @@
 package com.yueming.baby.ui.components
 
 import android.content.Context
+import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +14,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,8 +28,13 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
+import com.yueming.baby.data.DataManager
+import com.yueming.baby.data.cloud.CloudStorageConfig
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -36,9 +44,10 @@ fun VideoPlayer(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val exoPlayer = remember(filePath) {
+    val cloudConfig by DataManager.cloudStorageConfig.collectAsState()
+    val exoPlayer = remember(filePath, cloudConfig) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(filePath))
+            setAuthenticatedMediaItem(context, filePath, cloudConfig)
             prepare()
             playWhenReady = true
             repeatMode = Player.REPEAT_MODE_OFF
@@ -80,6 +89,29 @@ fun VideoPlayer(
             )
         }
     }
+}
+
+@OptIn(UnstableApi::class)
+private fun ExoPlayer.setAuthenticatedMediaItem(
+    context: Context,
+    filePath: String,
+    cloudConfig: CloudStorageConfig
+) {
+    val mediaItem = MediaItem.fromUri(filePath)
+    val uri = Uri.parse(filePath)
+    val shouldUseWebDavAuth = isConfiguredWebDavUrl(uri, cloudConfig)
+
+    if (!shouldUseWebDavAuth) {
+        setMediaItem(mediaItem)
+        return
+    }
+
+    val httpFactory = DefaultHttpDataSource.Factory()
+        .setDefaultRequestProperties(webDavAuthHeadersFor(filePath, cloudConfig))
+    val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
+    val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+        .createMediaSource(mediaItem)
+    setMediaSource(mediaSource)
 }
 
 @Composable

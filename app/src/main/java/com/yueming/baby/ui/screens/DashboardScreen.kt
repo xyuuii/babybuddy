@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,13 +38,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import java.time.LocalDate
 import java.util.UUID
+
+private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
 
 @Composable
 fun DashboardScreen() {
@@ -50,6 +54,7 @@ fun DashboardScreen() {
     val babyInfo by DataManager.babyInfo.collectAsState()
     val timeline by DataManager.timeline.collectAsState()
     val photos by DataManager.photos.collectAsState()
+    val isLoading by DataManager.isLoading.collectAsState()
 
     val ageMonths = remember(babyInfo.birthDate) { DataManager.getAgeInMonths(babyInfo.birthDate) }
     val ageDays = remember(babyInfo.birthDate) { DataManager.getAgeInDays(babyInfo.birthDate) }
@@ -60,6 +65,9 @@ fun DashboardScreen() {
     val animatedMilestone by animateIntAsState(targetValue = milestoneCount, animationSpec = tween(800))
     val animatedTimeline by animateIntAsState(targetValue = timeline.size, animationSpec = tween(800))
     val animatedPhotos by animateIntAsState(targetValue = photos.size, animationSpec = tween(800))
+    val recentMedia = remember(photos) {
+        photos.sortedByDescending { it.date }.take(DASHBOARD_RECENT_MEDIA_LIMIT)
+    }
 
     val tip = TIPS.find { t -> ageMonths >= t.months.first && ageMonths <= t.months.second } ?: TIPS.last()
 
@@ -98,6 +106,8 @@ fun DashboardScreen() {
     var showGrowthEntry by remember { mutableStateOf(false) }
     var showMilestoneDetail by remember { mutableStateOf(false) }
     var milestoneEntryData by remember { mutableStateOf<Milestone?>(null) }
+    var dashboardPreviewPhoto by remember { mutableStateOf<PhotoEntry?>(null) }
+    var dashboardPreviewVideoPath by remember { mutableStateOf<String?>(null) }
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -171,7 +181,7 @@ fun DashboardScreen() {
                     contentAlignment = Alignment.Center
                 ) {
                     if (babyInfo.avatar != null) {
-                        AsyncImage(model = babyInfo.avatar, contentDescription = null,
+                        AuthenticatedAsyncImage(model = babyInfo.avatar, contentDescription = null,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
                         Icon(Icons.Default.Person, contentDescription = null,
@@ -389,34 +399,27 @@ fun DashboardScreen() {
             }
         }
 
-        // Recent photos
-        val recentPhotos = photos.sortedByDescending { it.date }.take(4)
-        if (recentPhotos.isNotEmpty()) {
+        // Recent photos and videos
+        if (recentMedia.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.PhotoLibrary, null, Modifier.size(18.dp), tint = Color(0xFF64B5F6))
                     Spacer(Modifier.width(8.dp))
                     Text("最新照片", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "左右滑动查看更多",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    recentPhotos.forEach { photo ->
-                        Card(
-                            modifier = Modifier.weight(1f).aspectRatio(1f),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            AsyncImage(
-                                model = photo.url, contentDescription = photo.caption,
-                                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
+                RecentMediaCarousel(
+                    media = recentMedia,
+                    onPhotoClick = { dashboardPreviewPhoto = it },
+                    onVideoClick = { dashboardPreviewVideoPath = it.url }
+                )
             }
         }
 
@@ -511,6 +514,141 @@ fun DashboardScreen() {
             }
         )
     }
+
+    dashboardPreviewPhoto?.let { photo ->
+        DashboardMediaLightbox(
+            photo = photo,
+            onDismiss = { dashboardPreviewPhoto = null }
+        )
+    }
+
+    dashboardPreviewVideoPath?.let { path ->
+        Dialog(
+            onDismissRequest = { dashboardPreviewVideoPath = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            VideoPlayer(
+                filePath = path,
+                onClose = { dashboardPreviewVideoPath = null }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentMediaCarousel(
+    media: List<PhotoEntry>,
+    onPhotoClick: (PhotoEntry) -> Unit,
+    onVideoClick: (PhotoEntry) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth().height(132.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp)
+    ) {
+        items(
+            items = media,
+            key = { it.id },
+            contentType = { if (it.isVideoMedia()) "video" else "photo" }
+        ) { item ->
+            RecentMediaCard(
+                photo = item,
+                onClick = {
+                    if (item.isVideoMedia()) onVideoClick(item) else onPhotoClick(item)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentMediaCard(
+    photo: PhotoEntry,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .size(132.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (photo.isVideoMedia()) {
+                VideoThumbnail(
+                    filePath = photo.url,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AuthenticatedAsyncImage(
+                    model = photo.url,
+                    contentDescription = photo.caption,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardMediaLightbox(
+    photo: PhotoEntry,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Card(
+                    modifier = Modifier.clickable { },
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    AuthenticatedAsyncImage(
+                        model = photo.url,
+                        contentDescription = photo.caption,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(photo.caption, color = Color.White, fontWeight = FontWeight.Medium)
+                Text(
+                    photo.date,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(18.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(24.dp))
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White)
+            }
+        }
+    }
+}
+
+private fun PhotoEntry.isVideoMedia(): Boolean {
+    if (tags.any { it.contains("\u89c6\u9891") || it.equals("video", ignoreCase = true) }) {
+        return true
+    }
+    val cleanUrl = url.substringBefore('?').substringBefore('#').lowercase()
+    return listOf(".mp4", ".webm", ".mov", ".m4v", ".3gp", ".mkv").any { cleanUrl.endsWith(it) }
 }
 
 @Composable
@@ -702,7 +840,7 @@ private fun GrowthEntrySheet(
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.TopEnd
                     ) {
-                        AsyncImage(model = uri, contentDescription = null,
+                        AuthenticatedAsyncImage(model = uri, contentDescription = null,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         IconButton(
                             onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },
@@ -1009,7 +1147,7 @@ private fun MilestoneEntrySheet(
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.TopEnd
                     ) {
-                        AsyncImage(model = uri, contentDescription = null,
+                        AuthenticatedAsyncImage(model = uri, contentDescription = null,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         IconButton(
                             onClick = { selectedPhotos = selectedPhotos.filter { it != uri } },

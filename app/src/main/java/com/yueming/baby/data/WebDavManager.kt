@@ -3,8 +3,10 @@ package com.yueming.baby.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 object WebDavManager {
@@ -19,6 +21,13 @@ object WebDavManager {
         val success: Boolean,
         val message: String = "",
         val directoryContents: List<String> = emptyList()
+    )
+
+    data class UploadVerificationResult(
+        val exists: Boolean,
+        val sizeMatches: Boolean,
+        val remoteSize: Long? = null,
+        val message: String = ""
     )
 
     private val client = OkHttpClient.Builder()
@@ -148,6 +157,80 @@ object WebDavManager {
         } catch (e: Exception) {
             android.util.Log.e("WebDavManager", "uploadFile exception: remotePath=$remotePath, error=${e.message}", e)
             Result.failure(Exception("上传文件失败: ${e.message}"))
+        }
+    }
+
+    suspend fun uploadFile(config: WebDavConfig, remotePath: String, file: File, mimeType: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = buildAbsoluteUrl(config, remotePath)
+            android.util.Log.d("WebDavManager", "uploadFile -> $fullUrl, size=${file.length()} bytes, mime=$mimeType")
+            val parentPath = remotePath.substringBeforeLast("/", "")
+            if (parentPath.isNotEmpty()) {
+                createDirectoryChain(config, parentPath)
+            }
+            val request = Request.Builder()
+                .url(fullUrl)
+                .header("Authorization", Credentials.basic(config.username, config.password))
+                .header("User-Agent", "YueMing-Android")
+                .put(file.asRequestBody(mimeType.toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                android.util.Log.d("WebDavManager", "uploadFile response: code=${response.code}, success=${response.isSuccessful}")
+                if (!response.isSuccessful) {
+                    android.util.Log.e("WebDavManager", "uploadFile failed: HTTP ${response.code}, body=${response.body?.string()}")
+                }
+                Result.success(response.isSuccessful)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WebDavManager", "uploadFile exception: remotePath=$remotePath, error=${e.message}", e)
+            Result.failure(Exception("上传文件失败: ${e.message}"))
+        }
+    }
+
+    suspend fun verifyUploadedFile(
+        config: WebDavConfig,
+        remotePath: String,
+        expectedSize: Long
+    ): Result<UploadVerificationResult> = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = buildAbsoluteUrl(config, remotePath)
+            val headRequest = Request.Builder()
+                .url(fullUrl)
+                .header("Authorization", Credentials.basic(config.username, config.password))
+                .header("User-Agent", "YueMing-Android")
+                .head()
+                .build()
+            client.newCall(headRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val remoteSize = response.header("Content-Length")?.toLongOrNull()
+                    return@withContext Result.success(
+                        UploadVerificationResult(
+                            exists = true,
+                            sizeMatches = remoteSize == null || remoteSize == expectedSize,
+                            remoteSize = remoteSize,
+                            message = if (remoteSize == null) "文件存在" else "远端大小 $remoteSize / 本地大小 $expectedSize"
+                        )
+                    )
+                }
+                android.util.Log.w("WebDavManager", "HEAD verify failed: HTTP ${response.code}, fallback to PROPFIND")
+            }
+
+            val propfindRequest = buildRequest(config, fullUrl, "PROPFIND")
+                .header("Depth", "0")
+                .build()
+            client.newCall(propfindRequest).execute().use { response ->
+                Result.success(
+                    UploadVerificationResult(
+                        exists = response.isSuccessful,
+                        sizeMatches = response.isSuccessful,
+                        remoteSize = null,
+                        message = "PROPFIND HTTP ${response.code}"
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WebDavManager", "verifyUploadedFile exception: remotePath=$remotePath, error=${e.message}", e)
+            Result.failure(Exception("上传验证失败: ${e.message}"))
         }
     }
 
