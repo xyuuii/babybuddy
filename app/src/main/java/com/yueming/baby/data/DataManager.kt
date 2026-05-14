@@ -573,12 +573,16 @@ object DataManager {
                 )
             )
         }
-        savePhotos()
+        // Don't save to WebDAV yet — wait for upload to complete
+        // savePhotos() will be called after remote URL is set
 
         appScope.launch {
             val localFile = File(p.url)
             if (localFile.exists()) {
                 uploadLocalMedia(p, localFile, getWebDavConfig())
+            } else {
+                // No local file, URL is already remote — save now
+                savePhotos()
             }
         }
     }
