@@ -85,7 +85,7 @@ data class ChatMessage(
 data class AIConfig(
     val apiBaseUrl: String = "https://api.deepseek.com",
     val apiKey: String = "",
-    val model: String = "deepseek-chat"
+    val model: String = "deepseek-v4-pro"
 )
 
 data class AIProfile(
@@ -93,7 +93,7 @@ data class AIProfile(
     val name: String = "默认配置",
     val apiBaseUrl: String = "https://api.deepseek.com",
     val apiKey: String = "",
-    val model: String = "deepseek-chat",
+    val model: String = "deepseek-v4-pro",
     val systemPrompt: String = "你是一个专业的育儿助手，基于宝宝数据提供科学、温暖的育儿建议。",
     val temperature: Float = 0.7f,
     val topP: Float = 0.9f,

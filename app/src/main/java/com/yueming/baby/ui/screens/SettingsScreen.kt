@@ -670,7 +670,7 @@ private fun AIConfigSheet(
                 val editProfile = if (showAddForm) {
                     AIProfile(
                         apiBaseUrl = "https://api.deepseek.com",
-                        model = "deepseek-chat",
+                        model = "deepseek-v4-pro",
                         isActive = profiles.isEmpty()
                     )
                 } else selectedProfile!!
@@ -696,10 +696,9 @@ private fun AIConfigSheet(
                 // Show selected profile info with action buttons
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (selectedProfile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        containerColor = if (selectedProfile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
                         else MaterialTheme.colorScheme.surfaceContainer
                     )
                 ) {

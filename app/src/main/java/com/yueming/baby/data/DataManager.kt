@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
+import okhttp3.MediaType.Companion.toMediaType
 
 object DataManager {
     data class MediaUploadEvent(
@@ -783,8 +784,13 @@ object DataManager {
                     .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
                 val request = okhttp3.Request.Builder()
-                    .url(profile.apiBaseUrl)
+                    .url("${profile.apiBaseUrl.trimEnd('/')}/v1/chat/completions")
                     .header("Authorization", "Bearer ${profile.apiKey}")
+                    .header("Content-Type", "application/json")
+                    .post(okhttp3.RequestBody.create(
+                        "application/json".toMediaType(),
+                        """{"model":"${profile.model}","messages":[{"role":"user","content":"test"}],"max_tokens":1}"""
+                    ))
                     .build()
                 val response = client.newCall(request).execute()
                 withContext(Dispatchers.Main) {
