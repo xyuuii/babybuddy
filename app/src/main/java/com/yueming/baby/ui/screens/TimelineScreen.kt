@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -158,111 +159,122 @@ fun TimelineScreen() {
                             val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
                             ElevatedCard(
                                 modifier = Modifier.animateItem(),
-                                shape = RoundedCornerShape(20.dp),
-                                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp),
                                 colors = CardDefaults.elevatedCardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 )
                             ) {
-                                Row(Modifier.padding(14.dp)) {
-                                    Box(
-                                        Modifier.width(4.dp).fillMaxHeight()
-                                            .clip(RoundedCornerShape(2.dp)).background(catColor)
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Row(
-                                            Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                Column(Modifier.padding(14.dp)) {
+                                    // Top row: category chip + date + menu
+                                    Row(Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = catColor.copy(alpha = 0.12f)
                                         ) {
-                                            Text(record.title,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f))
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(record.date.takeLast(5),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                Spacer(Modifier.width(4.dp))
-                                                var menuExpanded by remember { mutableStateOf(false) }
-                                                Box {
-                                                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
-                                                        Icon(Icons.Default.MoreVert, null, Modifier.size(16.dp),
-                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                    }
-                                                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                                        DropdownMenuItem(
-                                                            text = { Text("编辑") },
-                                                            onClick = {
-                                                                menuExpanded = false
-                                                                editingRecord = record
-                                                                showAddDialog = true
-                                                            },
-                                                            leadingIcon = { Icon(Icons.Default.Edit, null, Modifier.size(16.dp)) }
-                                                        )
-                                                        DropdownMenuItem(
-                                                            text = { Text("删除", color = Color(0xFFEF5350)) },
-                                                            onClick = {
-                                                                menuExpanded = false
-                                                                DataManager.deleteRecord(record.id)
-                                                            },
-                                                            leadingIcon = { Icon(Icons.Default.Delete, null, Modifier.size(16.dp), tint = Color(0xFFEF5350)) }
-                                                        )
+                                            Text(" ${record.category} ",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = catColor,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(record.date,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                            Spacer(Modifier.width(4.dp))
+                                            var menuExpanded by remember { mutableStateOf(false) }
+                                            Box {
+                                                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                                                    Icon(Icons.Default.MoreVert, null, Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                                    DropdownMenuItem(text = { Text("编辑") }, onClick = {
+                                                        menuExpanded = false; editingRecord = record; showAddDialog = true
+                                                    }, leadingIcon = { Icon(Icons.Default.Edit, null, Modifier.size(16.dp)) })
+                                                    DropdownMenuItem(text = { Text("删除", color = Color(0xFFEF5350)) }, onClick = {
+                                                        menuExpanded = false; DataManager.deleteRecord(record.id)
+                                                    }, leadingIcon = { Icon(Icons.Default.Delete, null, Modifier.size(16.dp), tint = Color(0xFFEF5350)) })
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Title
+                                    Text(record.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold)
+
+                                    // Description
+                                    if (record.description.isNotEmpty()) {
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(record.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                    }
+
+                                    // Photos preview
+                                    if (record.photos.isNotEmpty()) {
+                                        Spacer(Modifier.height(10.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            record.photos.take(4).forEach { url ->
+                                                Surface(
+                                                    modifier = Modifier.size(56.dp),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceContainer
+                                                ) {
+                                                    AuthenticatedAsyncImage(model = url, contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                                }
+                                            }
+                                            if (record.photos.size > 4) {
+                                                Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(10.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceContainer) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text("+${record.photos.size - 4}", fontSize = 13.sp,
+                                                            color = MaterialTheme.colorScheme.primary)
                                                     }
                                                 }
                                             }
                                         }
-                                        if (record.description.isNotEmpty()) {
-                                            Spacer(Modifier.height(6.dp))
-                                            Text(record.description,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        }
-                                        if (record.photos.isNotEmpty()) {
-                                            Spacer(Modifier.height(8.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                record.photos.take(3).forEach { url ->
-                                                    Card(
-                                                        modifier = Modifier.size(52.dp),
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                                                    ) {
-                                                        AuthenticatedAsyncImage(model = url, contentDescription = null,
-                                                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                    }
+
+                                    // Videos preview
+                                    if (record.videos.isNotEmpty()) {
+                                        Spacer(Modifier.height(10.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            record.videos.take(4).forEach { path ->
+                                                Surface(modifier = Modifier.size(56.dp).clickable { playVideoPath = path },
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceContainer) {
+                                                    Box {
+                                                        VideoThumbnail(filePath = path, modifier = Modifier.fillMaxSize())
+                                                        // Play icon overlay
+                                                        Surface(modifier = Modifier.align(Alignment.Center).size(24.dp),
+                                                            shape = CircleShape, color = Color.Black.copy(alpha = 0.5f)) {
+                                                            Icon(Icons.Default.PlayArrow, null, Modifier.size(14.dp).align(Alignment.Center), tint = Color.White)
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                        if (record.videos.isNotEmpty()) {
-                                            Spacer(Modifier.height(8.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                record.videos.take(3).forEach { path ->
-                                                    Card(
-                                                        modifier = Modifier.size(52.dp).clickable { playVideoPath = path },
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                                                    ) {
-                                                        VideoThumbnail(
-                                                            filePath = path,
-                                                            modifier = Modifier.fillMaxSize()
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (record.tags.isNotEmpty()) {
-                                            Spacer(Modifier.height(8.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                record.tags.take(5).forEach { tag ->
-                                                    Box(
-                                                        Modifier.clip(RoundedCornerShape(10.dp))
-                                                            .background(catColor.copy(alpha = 0.15f))
-                                                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                                                    ) {
-                                                        Text(tag, fontSize = 10.sp, color = catColor)
-                                                    }
+                                    }
+
+                                    // Tags
+                                    if (record.tags.isNotEmpty()) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            record.tags.take(5).forEach { tag ->
+                                                Surface(shape = RoundedCornerShape(10.dp), color = catColor.copy(alpha = 0.08f)) {
+                                                    Text(" $tag ", color = catColor, fontSize = 11.sp,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                                                 }
                                             }
                                         }
@@ -270,8 +282,9 @@ fun TimelineScreen() {
                                 }
                             }
                         }
+
+                        item { Spacer(Modifier.height(80.dp)) }
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }
