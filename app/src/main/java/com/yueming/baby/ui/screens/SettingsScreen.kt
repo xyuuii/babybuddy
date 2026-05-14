@@ -605,6 +605,20 @@ private fun AIConfigSheet(
                         Text("尚未配置 AI 配置文件",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                showAddForm = true
+                                isEditing = true
+                                selectedProfileId = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("添加配置", color = Color.White)
+                        }
                     }
                 }
             } else if (!isEditing) {

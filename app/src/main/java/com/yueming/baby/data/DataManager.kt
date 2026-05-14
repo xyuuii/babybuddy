@@ -522,6 +522,38 @@ object DataManager {
         val r = if (record.babyId.isEmpty()) record.copy(babyId = _activeBaby.value.id) else record
         _timeline.value = (_timeline.value + r).toMutableList()
         saveTimeline()
+        // Sync attached photos/videos to photo wall
+        syncRecordMediaToPhotos(r)
+    }
+
+    private fun syncRecordMediaToPhotos(record: TimelineRecord) {
+        val newPhotos = mutableListOf<PhotoEntry>()
+        record.photos.forEachIndexed { index, url ->
+            newPhotos.add(PhotoEntry(
+                id = "photo-${record.id}-$index",
+                babyId = record.babyId,
+                url = url,
+                caption = "${record.title} - 照片${index + 1}",
+                date = record.date,
+                timelineRecordId = record.id,
+                tags = listOf(record.category)
+            ))
+        }
+        record.videos.forEachIndexed { index, url ->
+            newPhotos.add(PhotoEntry(
+                id = "video-${record.id}-$index",
+                babyId = record.babyId,
+                url = url,
+                caption = "${record.title} - 视频${index + 1}",
+                date = record.date,
+                timelineRecordId = record.id,
+                tags = listOf(record.category, "视频")
+            ))
+        }
+        if (newPhotos.isNotEmpty()) {
+            _photos.value = (newPhotos + _photos.value).toMutableList()
+            savePhotos()
+        }
     }
 
     fun updateRecord(id: String, updates: (TimelineRecord) -> TimelineRecord) {

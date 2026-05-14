@@ -118,7 +118,15 @@ fun DashboardScreen() {
         }
     }
 
-    if (babies.isEmpty()) {
+    if (isLoading) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = Color(0xFFEC407A))
+                Spacer(Modifier.height(16.dp))
+                Text("加载中...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    } else if (babies.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             contentAlignment = Alignment.Center
