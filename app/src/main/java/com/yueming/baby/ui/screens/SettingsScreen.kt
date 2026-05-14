@@ -665,8 +665,8 @@ private fun AIConfigSheet(
 
             Spacer(Modifier.height(4.dp))
 
-            // --- Bottom Area: Edit Form (ScrollableColumn) ---
-            if (showAddForm || (selectedProfile != null && isEditing)) {
+    // --- Bottom Area ---
+            if (showAddForm || isEditing) {
                 val editProfile = if (showAddForm) {
                     AIProfile(
                         apiBaseUrl = "https://api.deepseek.com",
