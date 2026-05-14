@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.ThumbnailManager
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.VideoPlayerDialog
 import kotlinx.coroutines.delay
@@ -82,16 +83,18 @@ fun PhotosScreen() {
         }
         if (uri != null) {
             uploadState = UploadState.Uploading
+            val localPath = DataManager.copyPhotoToInternalStorage(uri) ?: uri.toString()
+            val thumbPath = ThumbnailManager.generateThumbnail(context, uri, isVideo = false)
             DataManager.addPhoto(PhotoEntry(
                 id = "photo-${UUID.randomUUID().toString().take(8)}",
-                url = DataManager.copyPhotoToInternalStorage(uri) ?: uri.toString(),
+                url = localPath,
                 caption = photoCaption.ifBlank { "照片" },
                 date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-                tags = emptyList()
+                tags = emptyList(),
+                thumbnailPath = thumbPath
             ))
             photoCaption = ""; showUpload = false
-            uploadState = UploadState.Success("照片上传成功")
-            scope.launch { delay(3000); uploadState = null }
+            // Result will come via mediaUploadEvents
         }
     }
 
@@ -104,16 +107,27 @@ fun PhotosScreen() {
         }
         if (uri != null) {
             uploadState = UploadState.Uploading
-            val path = DataManager.copyVideoToInternalStorage(uri) ?: uri.toString()
+            val localPath = DataManager.copyVideoToInternalStorage(uri) ?: uri.toString()
+            val thumbPath = ThumbnailManager.generateThumbnail(context, uri, isVideo = true)
             DataManager.addPhoto(PhotoEntry(
                 id = "photo-${UUID.randomUUID().toString().take(8)}",
-                url = path, caption = photoCaption.ifBlank { "视频" },
+                url = localPath,
+                caption = photoCaption.ifBlank { "视频" },
                 date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-                tags = listOf("视频")
+                tags = listOf("视频"),
+                thumbnailPath = thumbPath
             ))
             photoCaption = ""; showUpload = false
-            uploadState = UploadState.Success("视频上传成功")
-            scope.launch { delay(3000); uploadState = null }
+        }
+    }
+
+    // Listen for real upload results
+    LaunchedEffect(Unit) {
+        DataManager.mediaUploadEvents.collect { event ->
+            uploadState = if (event.success) UploadState.Success(event.message)
+            else UploadState.Failed(event.message)
+            delay(3000)
+            uploadState = null
         }
     }
 
@@ -336,14 +350,16 @@ fun PhotosScreen() {
                                 )
                             ) {
                                 Box {
+                                    // Grid: show local thumbnail (instant), fallback to remote
+                                    val displayUrl = photo.thumbnailPath ?: photo.url
                                     if (isVideo) {
                                         VideoThumbnail(
-                                            filePath = photo.url,
+                                            filePath = displayUrl,
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 220.dp)
                                         )
                                     } else {
                                         AuthenticatedAsyncImage(
-                                            model = photo.url,
+                                            model = displayUrl,
                                             contentDescription = photo.caption,
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
                                             contentScale = ContentScale.Crop

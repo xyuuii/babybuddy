@@ -32,7 +32,8 @@ data class PhotoEntry(
     val caption: String,
     val date: String,
     val timelineRecordId: String? = null,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val thumbnailPath: String? = null   // Local thumbnail - null means use url directly
 )
 
 data class CategoryConfig(
