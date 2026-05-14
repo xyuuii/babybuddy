@@ -483,7 +483,9 @@ object DataManager {
                     val uploadResult = WebDavManager.uploadFile(config, "$MEDIA_PATH/$remoteName", data, mimeType)
                     if (uploadResult.isSuccess && uploadResult.getOrThrow()) {
                         android.util.Log.d("DataManager", "Photo upload to WebDAV succeeded: $remoteName")
-                        val remoteUrl = "http://${config.url}/$MEDIA_PATH/$remoteName".replace("//", "/").replace("http:/", "http://")
+                        // config.url already includes scheme (e.g., http://192.168.0.28:5005)
+                        val baseUrl = config.url.trimEnd('/')
+                        val remoteUrl = "$baseUrl/$MEDIA_PATH/$remoteName".replace("//", "/").replace("http:/", "http://").replace("https:/", "https://")
                         _photos.value = _photos.value.map {
                             if (it.id == p.id) it.copy(url = remoteUrl) else it
                         }.toMutableList()
