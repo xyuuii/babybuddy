@@ -176,24 +176,10 @@ object DataManager {
         appScope.launch {
             _isLoading.value = true
             try {
-                loadLocalMediaIndex()
                 initWebDavData()
             } finally {
                 _isLoading.value = false
             }
-        }
-    }
-
-    private suspend fun loadLocalMediaIndex() {
-        val db = database ?: return
-        try {
-            val localPhotos = db.photoDao().getAllOnce().map { it.toPhotoEntry() }
-            if (localPhotos.isNotEmpty()) {
-                _photos.value = localPhotos
-                android.util.Log.d("DataManager", "Loaded ${localPhotos.size} media items from local Room index")
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("DataManager", "Failed to load local media index", e)
         }
     }
 
@@ -285,7 +271,7 @@ object DataManager {
             },
             onFailure = {
                 android.util.Log.i("DataManager", "photos.json not found, starting fresh")
-                if (_photos.value.isEmpty()) _photos.value = emptyList()
+                _photos.value = emptyList()
             }
         )
     }
