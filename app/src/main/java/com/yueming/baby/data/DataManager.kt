@@ -551,8 +551,13 @@ object DataManager {
             ))
         }
         if (newPhotos.isNotEmpty()) {
-            _photos.value = (newPhotos + _photos.value).toMutableList()
-            savePhotos()
+            // Deduplicate: don't add if URL already exists in photos
+            val existingUrls = _photos.value.map { it.url }.toSet()
+            val deduped = newPhotos.filter { it.url !in existingUrls }
+            if (deduped.isNotEmpty()) {
+                _photos.value = (deduped + _photos.value).toMutableList()
+                savePhotos()
+            }
         }
     }
 

@@ -180,9 +180,38 @@ fun TimelineScreen() {
                                                 fontWeight = FontWeight.SemiBold,
                                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                                 modifier = Modifier.weight(1f))
-                                            Text(record.date.takeLast(5),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(record.date.takeLast(5),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Spacer(Modifier.width(4.dp))
+                                                var menuExpanded by remember { mutableStateOf(false) }
+                                                Box {
+                                                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                                                        Icon(Icons.Default.MoreVert, null, Modifier.size(16.dp),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    }
+                                                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                                                        DropdownMenuItem(
+                                                            text = { Text("编辑") },
+                                                            onClick = {
+                                                                menuExpanded = false
+                                                                editingRecord = record
+                                                                showAddDialog = true
+                                                            },
+                                                            leadingIcon = { Icon(Icons.Default.Edit, null, Modifier.size(16.dp)) }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("删除", color = Color(0xFFEF5350)) },
+                                                            onClick = {
+                                                                menuExpanded = false
+                                                                DataManager.deleteRecord(record.id)
+                                                            },
+                                                            leadingIcon = { Icon(Icons.Default.Delete, null, Modifier.size(16.dp), tint = Color(0xFFEF5350)) }
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                         if (record.description.isNotEmpty()) {
                                             Spacer(Modifier.height(6.dp))
@@ -284,7 +313,8 @@ fun TimelineScreen() {
                 },
                 onSave = { record ->
                     if (editingRecord != null) {
-                        DataManager.updateRecord(record.id) { record }
+                        DataManager.deleteRecord(editingRecord!!.id)
+                        DataManager.addRecord(record)
                     } else {
                         DataManager.addRecord(record)
                     }
