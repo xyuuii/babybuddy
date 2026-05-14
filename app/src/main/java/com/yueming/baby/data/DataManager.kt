@@ -809,6 +809,96 @@ object DataManager {
     // --- Chat ---
     fun addMessage(msg: ChatMessage) {
         _chatMessages.value = (_chatMessages.value + msg).toMutableList()
+        // Auto-send to AI if user message
+        if (msg.role == "user") {
+            sendToAI(msg.content)
+        }
+    }
+
+    private fun sendToAI(userInput: String) {
+        val profile = activeAIProfile ?: return
+        val systemPrompt = profile.systemPrompt.ifBlank { "你是一个专业的育儿助手。" }
+
+        // Build messages array (system + history + user)
+        val historyMessages = _chatMessages.value
+            .filter { it.role == "user" || it.role == "assistant" }
+            .map { mapOf("role" to it.role, "content" to it.content) }
+
+        val messages = listOf(
+            mapOf("role" to "system", "content" to systemPrompt)
+        ) + historyMessages
+
+        val requestBody = mapOf(
+            "model" to profile.model,
+            "messages" to messages,
+            "temperature" to profile.temperature.toDouble(),
+            "top_p" to profile.topP.toDouble(),
+            "max_tokens" to profile.maxTokens,
+            "stream" to false
+        )
+
+        appScope.launch {
+            try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+
+                val request = okhttp3.Request.Builder()
+                    .url("${profile.apiBaseUrl.trimEnd('/')}/v1/chat/completions")
+                    .header("Authorization", "Bearer ${profile.apiKey}")
+                    .header("Content-Type", "application/json")
+                    .post(okhttp3.RequestBody.create(
+                        "application/json".toMediaType(),
+                        Gson().toJson(requestBody)
+                    ))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: ""
+
+                if (response.isSuccessful) {
+                    val reply = extractContent(body)
+                    val aiMsg = ChatMessage(
+                        id = "msg-${System.currentTimeMillis()}",
+                        role = "assistant",
+                        content = reply,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    _chatMessages.value = (_chatMessages.value + aiMsg).toMutableList()
+                } else {
+                    android.util.Log.e("DataManager", "AI chat failed: HTTP ${response.code}, body: $body")
+                    val errorMsg = ChatMessage(
+                        id = "msg-${System.currentTimeMillis()}",
+                        role = "assistant",
+                        content = "抱歉，请求失败 (HTTP ${response.code})。请检查 API 配置。",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    _chatMessages.value = (_chatMessages.value + errorMsg).toMutableList()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DataManager", "AI chat error", e)
+                val errorMsg = ChatMessage(
+                    id = "msg-${System.currentTimeMillis()}",
+                    role = "assistant",
+                    content = "抱歉，连接失败：${e.message}",
+                    timestamp = System.currentTimeMillis()
+                )
+                _chatMessages.value = (_chatMessages.value + errorMsg).toMutableList()
+            }
+        }
+    }
+
+    private fun extractContent(json: String): String {
+        return try {
+            val obj = Gson().fromJson(json, Map::class.java)
+            val choices = obj["choices"] as? List<*> ?: return json.take(200)
+            val first = choices.firstOrNull() as? Map<*, *> ?: return json.take(200)
+            val message = first["message"] as? Map<*, *> ?: return json.take(200)
+            message["content"]?.toString() ?: json.take(200)
+        } catch (e: Exception) {
+            json.take(200)
+        }
     }
 
     fun clearMessages() { _chatMessages.value = emptyList() }
