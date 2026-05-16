@@ -101,7 +101,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
 
     // WorkManager for scheduled backup
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     // SMB (jcifs-ng)
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
