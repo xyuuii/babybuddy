@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement for babybuddy
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user need should this solve?
+      placeholder: As a parent, I want ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or behavior you want.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. What other approaches did you consider?
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and storage impact
+      description: Does this touch photos, videos, NAS sync, AI providers, credentials, or baby records?
