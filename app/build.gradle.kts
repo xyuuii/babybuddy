@@ -93,7 +93,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // OkHttp for WebDAV operations
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
 
     // Media3 ExoPlayer for video playback
     implementation("androidx.media3:media3-exoplayer:1.5.1")
