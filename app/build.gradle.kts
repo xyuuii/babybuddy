@@ -106,7 +106,7 @@ dependencies {
     // SMB (jcifs-ng)
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     // FTP (Apache Commons Net)
-    implementation("commons-net:commons-net:3.11.1")
+    implementation("commons-net:commons-net:3.13.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
