@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 
 object BabyMotion {
@@ -36,6 +37,16 @@ object BabyMotion {
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
+
+    fun cardPressSpring(): AnimationSpec<Float> = spring(
+        dampingRatio = 0.72f,
+        stiffness = Spring.StiffnessMedium
+    )
+
+    fun cardShapeSpring(): AnimationSpec<Dp> = spring(
+        dampingRatio = 0.82f,
+        stiffness = Spring.StiffnessMedium
+    )
 }
 
 @Composable
@@ -49,6 +60,25 @@ fun Modifier.miuixPressable(
         targetValue = if (enabled && isPressed) pressedScale else 1f,
         animationSpec = BabyMotion.pressSpring(),
         label = "miuixPressScale"
+    )
+
+    return graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
+@Composable
+fun Modifier.miuixCardPressable(
+    interactionSource: InteractionSource,
+    enabled: Boolean = true,
+    pressedScale: Float = 0.965f
+): Modifier {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (enabled && isPressed) pressedScale else 1f,
+        animationSpec = BabyMotion.cardPressSpring(),
+        label = "miuixCardPressScale"
     )
 
     return graphicsLayer {

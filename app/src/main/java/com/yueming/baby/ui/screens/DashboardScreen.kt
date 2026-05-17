@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -17,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -67,6 +69,9 @@ import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.miuixCardPressable
+import com.yueming.baby.ui.motion.miuixFadeSlideIn
 import com.yueming.baby.ui.motion.miuixPressable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -277,7 +282,9 @@ fun DashboardScreen(
                     onAvatarClick = { avatarPicker.launch("image/*") },
                     onSelectBaby = { DataManager.switchBaby(it.id) },
                     onAddBaby = { showAddBaby = true },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 20)
                 )
             }
 
@@ -295,7 +302,9 @@ fun DashboardScreen(
                     },
                     onComplete = { DataManager.completeReminder(it.id) },
                     onDelete = { DataManager.deleteReminder(it.id) },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 70)
                 )
             }
 
@@ -312,7 +321,9 @@ fun DashboardScreen(
                         showReminderEditor = true
                     },
                     onVaccine = { showVaccineScreen = true },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 120)
                 )
             }
 
@@ -326,7 +337,9 @@ fun DashboardScreen(
                     upcomingMilestones = upcomingMilestones,
                     onGrowthClick = { showGrowthEntry = true },
                     onMilestoneClick = { showMilestoneDetail = true },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 170)
                 )
             }
 
@@ -337,7 +350,9 @@ fun DashboardScreen(
                     onOpenTimeline = onOpenTimeline,
                     onPhotoClick = { dashboardPreviewPhoto = it },
                     onVideoClick = { dashboardPreviewVideoPath = it.url },
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 220)
                 )
             }
 
@@ -346,7 +361,9 @@ fun DashboardScreen(
                     icon = Icons.Default.Favorite,
                     accent = Color(0xFFEC407A),
                     title = "育儿小贴士",
-                    modifier = Modifier.animateItem()
+                    modifier = Modifier
+                        .animateItem()
+                        .miuixFadeSlideIn(delayMillis = 270)
                 ) {
                     Text(
                         "${babyInfo.nickname}现在 ${ageMonths} 个月。${tip.text}",
@@ -681,36 +698,89 @@ private fun DashboardQuickActionTile(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val tileCorner by animateDpAsState(
+        targetValue = if (isPressed) 24.dp else 20.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "quickActionCorner"
+    )
+    val iconSize by animateDpAsState(
+        targetValue = if (isPressed) 38.dp else 34.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "quickActionIconSize"
+    )
+    val iconCorner by animateDpAsState(
+        targetValue = if (isPressed) 16.dp else 13.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "quickActionIconCorner"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (isPressed) {
+            accent.copy(alpha = 0.14f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.56f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.miuixEase),
+        label = "quickActionContainer"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isPressed) {
+            accent.copy(alpha = 0.34f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.miuixEase),
+        label = "quickActionBorder"
+    )
+    val iconContainerColor by animateColorAsState(
+        targetValue = if (isPressed) accent.copy(alpha = 0.22f) else accent.copy(alpha = 0.13f),
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.miuixEase),
+        label = "quickActionIconContainer"
+    )
+    val shape = RoundedCornerShape(tileCorner)
     Column(
         modifier = modifier
-            .height(90.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.56f))
-            .miuixPressable(interactionSource, pressedScale = 0.95f)
+            .heightIn(min = 98.dp)
+            .clip(shape)
+            .background(containerColor)
+            .border(0.5.dp, borderColor, shape)
+            .miuixCardPressable(interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .animateContentSize(animationSpec = tween(durationMillis = 180, easing = BabyMotion.miuixEase))
+            .padding(horizontal = 6.dp, vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(accent.copy(alpha = 0.13f)),
+                .size(iconSize)
+                .clip(RoundedCornerShape(iconCorner))
+                .background(iconContainerColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, Modifier.size(18.dp), tint = accent)
         }
-        Spacer(Modifier.height(7.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.labelLarge.copy(lineHeight = 16.sp),
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(2.dp))
         Text(
             detail,
-            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
