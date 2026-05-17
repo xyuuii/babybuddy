@@ -50,11 +50,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import com.yueming.baby.R
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyIllustrationCard
+import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.motionCardPress
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +75,7 @@ import java.util.UUID
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-private val primaryPink = Color(0xFFEC407A)
+private val primaryPink = BabyPalette.Rose
 
 private fun catIcon(catId: String): ImageVector = when (catId) {
     "milestone" -> Icons.Default.Star
@@ -108,39 +112,16 @@ private fun TimelineHeroCard(
     totalCount: Int,
     activeCategoryLabel: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(34.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(primaryPink.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.AutoStories, null, Modifier.size(26.dp), tint = primaryPink)
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
+    BabyIllustrationCard(
+        imageRes = R.drawable.ill_timeline_milestones,
+        title = "${nickname.ifBlank { "宝宝" }}的成长时光",
+        subtitle = "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
+        badge = "Timeline",
+        accent = primaryPink,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(138.dp)
+    )
 }
 
 @Composable
@@ -284,26 +265,10 @@ fun TimelineScreen() {
         groups
     }
 
-    // FAB pulse animation
-    val infiniteTransition = rememberInfiniteTransition()
-    val fabScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    val fabGlow by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
+    val fabScale = 1f
+    val fabGlow = 0.72f
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().babyPageBackground()) {
         Column(modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 0.dp)) {
             Text(
                 "时间线",
@@ -337,6 +302,12 @@ fun TimelineScreen() {
                 }
             }
 
+            Spacer(Modifier.height(12.dp))
+            TimelineHeroCard(
+                nickname = babyInfo.nickname,
+                totalCount = scopedTimeline.size,
+                activeCategoryLabel = activeCategoryLabel
+            )
             Spacer(Modifier.height(16.dp))
             // Header
             Row(
@@ -423,39 +394,15 @@ fun TimelineScreen() {
                     Modifier.fillMaxSize().padding(end = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Decorative circle behind icon
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .background(
-                                    primaryPink.copy(alpha = 0.08f),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.EmojiEvents,
-                                contentDescription = null,
-                                Modifier.size(48.dp),
-                                tint = primaryPink.copy(alpha = 0.5f)
-                            )
-                        }
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            "还没有记录哦~",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "点击下方按钮\n记录宝宝的每一个珍贵时刻",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    BabyIllustrationCard(
+                        imageRes = R.drawable.ill_timeline_milestones,
+                        title = "还没有记录",
+                        subtitle = "添加第一条时间线，记录宝宝的每一个珍贵时刻。",
+                        badge = "New Memory",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                    )
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {

@@ -35,7 +35,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import com.yueming.baby.R
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.BabyIllustrationCard
+import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.motionListItem
 import java.time.Instant
 import java.time.LocalDate
@@ -93,7 +97,7 @@ fun FeedingScreen(onDismiss: () -> Unit) {
         "snack" to FeedingTypeInfo("零食", Icons.Default.Star, Color(0xFFFDE68A), "")
     )
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(modifier = Modifier.fillMaxSize().babyPageBackground()) {
         // Status bar background fill — extends into transparent status bar area
         Box(
             modifier = Modifier
@@ -125,16 +129,30 @@ fun FeedingScreen(onDismiss: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                BabyIllustrationCard(
+                    imageRes = R.drawable.ill_home_memory,
+                    title = "喂养日志",
+                    subtitle = "${babyInfo.nickname.ifBlank { "宝宝" }}今天已经记录 ${todayRecords.size} 次喂养。",
+                    badge = "Feeding",
+                    accent = BabyPalette.Gold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(132.dp)
+                        .animateItem()
+                        .motionListItem(index = 0)
+                )
+            }
             // Today summary card
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .animateItem()
-                        .motionListItem(index = 0),
+                        .motionListItem(index = 1),
                     shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)),
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
                 ) {
                     Column(Modifier.padding(20.dp)) {
@@ -156,10 +174,10 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .animateItem()
-                        .motionListItem(index = 1),
+                        .motionListItem(index = 2),
                     shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)),
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
                 ) {
                     Column(Modifier.padding(16.dp)) {

@@ -38,11 +38,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yueming.baby.R
 import com.yueming.baby.data.*
 import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyIllustrationCard
+import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
 import com.yueming.baby.ui.motion.motionCardPress
@@ -92,7 +96,7 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().babyPageBackground(),
         contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -190,8 +194,9 @@ fun SettingsScreen() {
             Card(
                 modifier = Modifier.fillMaxWidth().animateItem(),
                 shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
             ) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -218,8 +223,9 @@ fun SettingsScreen() {
             Card(
                 modifier = Modifier.fillMaxWidth().animateItem(),
                 shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
             ) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -442,10 +448,20 @@ private fun MiuixSettingsHeader(
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onBackground
         )
+        BabyIllustrationCard(
+            imageRes = R.drawable.ill_settings_care,
+            title = "照护中心",
+            subtitle = "管理宝宝资料、同步、AI 和记录分类。",
+            badge = "Settings",
+            accent = BabyPalette.Mint,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp)
+        )
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(34.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
@@ -531,9 +547,9 @@ private fun SettingsGroupCard(
     )
     val containerColor by animateColorAsState(
         targetValue = if (pressed) {
-            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
         },
         animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
         label = "settingsGroupContainer"
@@ -783,8 +799,8 @@ private fun MiuixSheetCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(30.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
     ) {
         Column(
             modifier = Modifier.padding(18.dp),

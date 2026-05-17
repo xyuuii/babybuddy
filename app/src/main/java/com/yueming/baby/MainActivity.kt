@@ -44,6 +44,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.DataManager
+import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.motionPressable
 import com.yueming.baby.ui.screens.*
@@ -240,10 +241,10 @@ private fun MiuixShellNavigationBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f))
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f))
     ) {
         Row(
             modifier = Modifier
@@ -284,7 +285,7 @@ private fun RowScope.YueMingNavigationBarItem(
     )
     val indicatorColor by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+            BabyPalette.Rose.copy(alpha = 0.92f)
         } else {
             Color.Transparent
         },

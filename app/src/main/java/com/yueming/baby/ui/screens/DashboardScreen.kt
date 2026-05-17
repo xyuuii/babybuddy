@@ -63,12 +63,19 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.yueming.baby.R
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyIllustrationCard
+import com.yueming.baby.ui.components.BabyMetricChip
+import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.BabySectionHeader
+import com.yueming.baby.ui.components.BabySoftCard
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.miuixCardPressable
 import com.yueming.baby.ui.motion.miuixFadeSlideIn
@@ -232,40 +239,42 @@ fun DashboardScreen(
     }
 
     if (isLoading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().babyPageBackground(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = Color(0xFFEC407A))
+                CircularProgressIndicator(color = BabyPalette.Rose)
                 Spacer(Modifier.height(16.dp))
                 Text("加载中...", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     } else if (babies.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize().babyPageBackground().padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.ChildCare, null, Modifier.size(56.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f))
-                Spacer(Modifier.height(16.dp))
-                Text("还没有添加宝宝",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(6.dp))
-                Text("记录宝宝的成长点滴，从添加第一个宝宝开始",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                BabyIllustrationCard(
+                    imageRes = R.drawable.ill_home_memory,
+                    title = "欢迎来到 babybuddy",
+                    subtitle = "记录每一次微笑、喂养、复查和成长节点。",
+                    badge = "Baby Care",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(230.dp)
+                )
                 Spacer(Modifier.height(20.dp))
                 Button(
                     onClick = { showAddBaby = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
+                    colors = ButtonDefaults.buttonColors(containerColor = BabyPalette.Rose),
                     shape = RoundedCornerShape(16.dp)
                 ) { Text("添加宝宝", color = Color.White) }
             }
         }
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().babyPageBackground(),
             contentPadding = PaddingValues(start = 20.dp, top = 14.dp, end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -532,12 +541,23 @@ private fun DashboardTodaySummary(
             )
         }
 
+        BabyIllustrationCard(
+            imageRes = R.drawable.ill_home_memory,
+            title = "今天的照护记忆",
+            subtitle = "今天也把${babyInfo.nickname.ifBlank { "宝宝" }}的小事照顾好。",
+            badge = "Today",
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(142.dp),
+            accent = BabyPalette.Rose
+        )
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            border = BorderStroke(0.6.dp, BabyPalette.Rose.copy(alpha = 0.16f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -548,7 +568,7 @@ private fun DashboardTodaySummary(
                         modifier = Modifier
                             .size(58.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .background(BabyPalette.Rose.copy(alpha = 0.13f))
                             .clickable(onClick = onAvatarClick),
                         contentAlignment = Alignment.Center
                     ) {
@@ -562,7 +582,7 @@ private fun DashboardTodaySummary(
                         } else {
                             Text(
                                 babyInfo.nickname.take(1).ifBlank { "宝" },
-                                color = MaterialTheme.colorScheme.primary,
+                                color = BabyPalette.Rose,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 24.sp
                             )
@@ -592,9 +612,9 @@ private fun DashboardTodaySummary(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    DashboardCareStat("待办", "${openReminderCount}项", Color(0xFF26A69A), Modifier.weight(1f))
-                    DashboardCareStat("喂养", "${todayFeedingCount}次", Color(0xFFF6BA6D), Modifier.weight(1f))
-                    DashboardCareStat("月龄", "${ageMonths}月", Color(0xFFEC407A), Modifier.weight(1f))
+                    DashboardCareStat("待办", "${openReminderCount}项", BabyPalette.Mint, Modifier.weight(1f))
+                    DashboardCareStat("喂养", "${todayFeedingCount}次", BabyPalette.Gold, Modifier.weight(1f))
+                    DashboardCareStat("月龄", "${ageMonths}月", BabyPalette.Rose, Modifier.weight(1f))
                 }
             }
         }
@@ -635,18 +655,14 @@ private fun DashboardQuickActions(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                "快速记录",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            BabySectionHeader(title = "快速记录")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -655,7 +671,7 @@ private fun DashboardQuickActions(
                     label = "记一笔",
                     detail = "时间线",
                     icon = Icons.Default.EditNote,
-                    accent = Color(0xFFEC407A),
+                    accent = BabyPalette.Rose,
                     onClick = onTimeline,
                     modifier = Modifier.weight(1f)
                 )
@@ -663,7 +679,7 @@ private fun DashboardQuickActions(
                     label = "喂养",
                     detail = "${todayFeedingCount}次",
                     icon = Icons.Default.Fastfood,
-                    accent = Color(0xFFF6BA6D),
+                    accent = BabyPalette.Gold,
                     onClick = onFeeding,
                     modifier = Modifier.weight(1f)
                 )
@@ -671,7 +687,7 @@ private fun DashboardQuickActions(
                     label = "提醒",
                     detail = "复查",
                     icon = Icons.Default.Notifications,
-                    accent = Color(0xFF26A69A),
+                    accent = BabyPalette.Mint,
                     onClick = onReminder,
                     modifier = Modifier.weight(1f)
                 )
@@ -679,7 +695,7 @@ private fun DashboardQuickActions(
                     label = "疫苗",
                     detail = nextVaccineText,
                     icon = Icons.Default.MedicalServices,
-                    accent = Color(0xFF4CAF50),
+                    accent = BabyPalette.Mint,
                     onClick = onVaccine,
                     modifier = Modifier.weight(1f)
                 )
@@ -1820,8 +1836,8 @@ private fun MiuixDashboardPanel(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(30.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -1832,7 +1848,7 @@ private fun MiuixDashboardPanel(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(accent.copy(alpha = 0.14f)),
+                        .background(accent.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(icon, null, Modifier.size(19.dp), tint = accent)

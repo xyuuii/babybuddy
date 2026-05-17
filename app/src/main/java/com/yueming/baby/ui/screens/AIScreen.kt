@@ -78,7 +78,11 @@ import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.ChatMessage
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
+import com.yueming.baby.R
+import com.yueming.baby.ui.components.BabyIllustrationCard
+import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.MarkdownText
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
 import java.text.SimpleDateFormat
@@ -155,7 +159,7 @@ fun AIScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .babyPageBackground()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             CompactAssistantHeader(
@@ -240,7 +244,7 @@ private fun CompactAssistantHeader(
     messageCount: Int,
     onClear: () -> Unit
 ) {
-    Surface(color = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
+    Surface(color = Color.Transparent, tonalElevation = 0.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,35 +292,22 @@ private fun WelcomeContent(
             .padding(top = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
+        BabyIllustrationCard(
+            imageRes = R.drawable.ill_ai_cloud,
+            title = "AI 成长助手",
+            subtitle = babyContextSummary,
+            badge = "Ask BabyBuddy",
+            accent = BabyPalette.Blue,
             modifier = Modifier
-                .size(84.dp)
-                .shadow(8.dp, CircleShape, spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.SmartToy,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-
+                .fillMaxWidth()
+                .height(176.dp)
+        )
         Spacer(Modifier.height(18.dp))
         Text(
             "\u6709\u4ec0\u4e48\u60f3\u95ee\u7684\uff1f",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            babyContextSummary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 20.dp)
         )
 
         Spacer(Modifier.height(22.dp))
@@ -385,13 +376,13 @@ private fun ChatBubble(
                         RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp)
                     },
                     color = if (isUser) {
-                        MaterialTheme.colorScheme.primary
+                        BabyPalette.Rose
                     } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
                     },
                     tonalElevation = if (isUser) 0.dp else 2.dp,
                     shadowElevation = if (isUser) 0.dp else 1.dp,
-                    border = if (isUser) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    border = if (isUser) null else BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 11.dp)) {
                         when {
@@ -542,7 +533,7 @@ private fun InputRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
@@ -568,10 +559,10 @@ private fun InputRow(
                     },
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        focusedBorderColor = BabyPalette.Rose.copy(alpha = 0.35f),
                         unfocusedBorderColor = Color.Transparent,
                         disabledBorderColor = Color.Transparent
                     )
@@ -620,44 +611,19 @@ private fun NotConfiguredView() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .babyPageBackground()
             .padding(28.dp),
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(82.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.SmartToy,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                Spacer(Modifier.height(18.dp))
-                Text("先配置一个 AI Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "配置 API Key 后，AI 助手会结合宝宝资料、成长记录、喂养和疫苗状态给出建议。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
-                )
-            }
-        }
+        BabyIllustrationCard(
+            imageRes = R.drawable.ill_ai_cloud,
+            title = "先配置一个 AI Profile",
+            subtitle = "配置 API Key 后，AI 助手会结合宝宝资料、成长记录、喂养和疫苗状态给出建议。",
+            badge = "AI",
+            accent = BabyPalette.Blue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(240.dp)
+        )
     }
 }
