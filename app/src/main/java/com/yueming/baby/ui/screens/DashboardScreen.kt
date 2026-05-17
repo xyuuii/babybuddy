@@ -740,7 +740,7 @@ private fun DashboardQuickActionTile(
     val shape = RoundedCornerShape(tileCorner)
     Column(
         modifier = modifier
-            .heightIn(min = 98.dp)
+            .heightIn(min = 108.dp)
             .clip(shape)
             .background(containerColor)
             .border(0.5.dp, borderColor, shape)
@@ -767,8 +767,10 @@ private fun DashboardQuickActionTile(
         Spacer(Modifier.height(6.dp))
         Text(
             label,
-            modifier = Modifier.fillMaxWidth(),
-            style = MaterialTheme.typography.labelLarge.copy(lineHeight = 16.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 22.dp),
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -777,8 +779,10 @@ private fun DashboardQuickActionTile(
         Spacer(Modifier.height(2.dp))
         Text(
             detail,
-            modifier = Modifier.fillMaxWidth(),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 20.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 1,
