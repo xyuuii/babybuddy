@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -28,6 +29,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
@@ -57,8 +60,8 @@ fun FeedingScreen(onDismiss: () -> Unit) {
         feedingRecords.filter { belongsToBaby(it.babyId, babyInfo.id) }
     }
     var selectedType by remember { mutableStateOf("formula") }
-    var volume by remember { mutableStateOf("") }
-    var showVolumeInput by remember { mutableStateOf(false) }
+    var quickNumber by remember { mutableStateOf(feedingQuickEntryDefaultValue("formula")) }
+    var quickNotes by remember { mutableStateOf("") }
     var deleteConfirmId by remember { mutableStateOf<String?>(null) }
 
     val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
@@ -69,6 +72,9 @@ fun FeedingScreen(onDismiss: () -> Unit) {
         todayRecords.filter { it.type == "formula" || it.type == "water" }.sumOf { it.volumeMl }
     }
     val todayBreastCount = remember(todayRecords) { todayRecords.count { it.type == "breast" } }
+    val todayBreastMinutes = remember(todayRecords) {
+        todayRecords.filter { it.type == "breast" }.sumOf { it.durationMin }
+    }
     val todaySupplementCount = remember(todayRecords) { todayRecords.count { it.type == "supplement" } }
 
     val historyRecords = remember(scopedFeedingRecords) {
@@ -131,7 +137,7 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                         Spacer(Modifier.height(14.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             SummaryItem("${todayRecords.size} 次", "总次数")
-                            SummaryItem("${todayBreastCount} 次", "母乳")
+                            SummaryItem("${todayBreastCount}次 ${todayBreastMinutes}分", "母乳")
                             SummaryItem("${todayFormulaMl} ml", "奶量")
                             SummaryItem("${todaySupplementCount} 次", "辅食")
                         }
@@ -163,8 +169,8 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                                     selected = isSelected,
                                     onClick = {
                                         selectedType = type
-                                        showVolumeInput = type in listOf("formula", "water")
-                                        volume = ""
+                                        quickNumber = feedingQuickEntryDefaultValue(type)
+                                        quickNotes = ""
                                     },
                                     label = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,60 +188,122 @@ fun FeedingScreen(onDismiss: () -> Unit) {
 
                         Spacer(Modifier.height(12.dp))
 
-                        if (showVolumeInput) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        val selectedInfo = feedingTypeInfo[selectedType]!!
+                        val needsNumber = feedingQuickEntryNeedsNumber(selectedType)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            color = selectedInfo.color.copy(alpha = 0.12f),
+                            border = BorderStroke(0.5.dp, selectedInfo.color.copy(alpha = 0.28f))
+                        ) {
+                            Column(
+                                Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                OutlinedTextField(
-                                    value = volume,
-                                    onValueChange = { v -> volume = v.filter { it.isDigit() } },
-                                    placeholder = { Text("输入${feedingTypeInfo[selectedType]?.unit ?: ""}量") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp),
-                                    textStyle = MaterialTheme.typography.bodyMedium
-                                )
-                                Button(
-                                    onClick = {
-                                        val vol = volume.toIntOrNull() ?: 0
-                                        if (vol > 0 || selectedType !in listOf("formula", "water")) {
-                                            DataManager.addFeedingRecord(FeedingRecord(
-                                                id = "feed-${UUID.randomUUID().toString().take(8)}",
-                                                timestamp = System.currentTimeMillis(),
-                                                type = selectedType,
-                                                volumeMl = vol
-                                            ))
-                                            volume = ""
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(selectedInfo.color.copy(alpha = 0.22f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                selectedInfo.icon,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = selectedInfo.color
+                                            )
                                         }
+                                        Column {
+                                            Text(
+                                                selectedInfo.label,
+                                                fontWeight = FontWeight.SemiBold,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Text(
+                                                if (needsNumber) {
+                                                    "设置${feedingQuickEntryUnit(selectedType)}后记录"
+                                                } else {
+                                                    "可直接记录，也可以补充备注"
+                                                },
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (needsNumber) {
+                                    val unit = feedingQuickEntryUnit(selectedType)
+                                    OutlinedTextField(
+                                        value = quickNumber,
+                                        onValueChange = { quickNumber = sanitizeFeedingQuickEntryNumber(it) },
+                                        label = { Text(if (selectedType == "breast") "时长" else "数量") },
+                                        placeholder = { Text("输入$unit") },
+                                        trailingIcon = { Text(unit, fontSize = 12.sp) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(14.dp),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        textStyle = MaterialTheme.typography.bodyMedium
+                                    )
+
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        feedingQuickEntryPresets(selectedType).forEach { preset ->
+                                            AssistChip(
+                                                onClick = { quickNumber = preset.toString() },
+                                                label = { Text("$preset $unit", fontSize = 11.sp) },
+                                                colors = AssistChipDefaults.assistChipColors(
+                                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+                                                )
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    OutlinedTextField(
+                                        value = quickNotes,
+                                        onValueChange = { quickNotes = it },
+                                        placeholder = { Text("备注，例如：米粉两勺、香蕉半根") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(14.dp),
+                                        textStyle = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+
+                                Button(
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    onClick = {
+                                        DataManager.addFeedingRecord(
+                                            createQuickFeedingRecord(
+                                                type = selectedType,
+                                                numberValue = quickNumber,
+                                                notes = quickNotes,
+                                                id = "feed-${UUID.randomUUID().toString().take(8)}"
+                                            )
+                                        )
+                                        quickNotes = ""
                                     },
-                                    enabled = volume.toIntOrNull()?.let { it > 0 } ?: (selectedType !in listOf("formula", "water")),
-                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = canSaveFeedingQuickEntry(selectedType, quickNumber),
+                                    shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
                                 ) {
                                     Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("记录")
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("记录${selectedInfo.label}")
                                 }
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    DataManager.addFeedingRecord(FeedingRecord(
-                                        id = "feed-${UUID.randomUUID().toString().take(8)}",
-                                        timestamp = System.currentTimeMillis(),
-                                        type = selectedType,
-                                        durationMin = if (selectedType == "breast") 10 else 0
-                                    ))
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
-                            ) {
-                                Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("记录${feedingTypeInfo[selectedType]?.label ?: ""}")
                             }
                         }
                     }
@@ -378,14 +446,12 @@ private fun FeedingRecordItem(
             Column(Modifier.weight(1f)) {
                 Text(info?.label ?: record.type, fontWeight = FontWeight.Medium,
                     style = MaterialTheme.typography.bodySmall)
-                val detail = buildString {
-                    if (record.volumeMl > 0) append("${record.volumeMl} ml")
-                    if (record.durationMin > 0) append("${record.durationMin} 分钟")
-                    if (record.notes.isNotBlank()) append(record.notes)
-                }
+                val detail = feedingRecordDetail(record)
                 if (detail.isNotEmpty()) {
                     Text(detail, fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
                 }
             }
             Text(timeStr, fontSize = 12.sp,
