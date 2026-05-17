@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -48,8 +50,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -64,10 +69,13 @@ import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.motion.miuixPressable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
 private val REMINDER_EDITOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
@@ -2229,37 +2237,258 @@ fun YueMingDatePicker(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun YueMingTimePicker(
     initialTime: LocalTime,
     onTimeSelected: (LocalTime) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val timePickerState = rememberTimePickerState(
-        initialHour = initialTime.hour,
-        initialMinute = initialTime.minute,
-        is24Hour = true
-    )
-    AlertDialog(
+    var selectedHour by remember(initialTime) { mutableStateOf(initialTime.hour) }
+    var selectedMinute by remember(initialTime) { mutableStateOf(initialTime.minute) }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择时间", fontWeight = FontWeight.SemiBold) },
-        text = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .widthIn(max = 380.dp),
+            shape = RoundedCornerShape(30.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                TimePicker(state = timePickerState)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "选择时间",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "%02d:%02d".format(selectedHour, selectedMinute),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "关闭")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(236.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "小时",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        MiuixWheelPicker(
+                            values = (0..23).toList(),
+                            selectedValue = selectedHour,
+                            onValueChange = { selectedHour = it },
+                            valueLabel = { "%02d".format(it) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Text(
+                        ":",
+                        modifier = Modifier.padding(top = 28.dp),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "分钟",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        MiuixWheelPicker(
+                            values = (0..59).toList(),
+                            selectedValue = selectedMinute,
+                            onValueChange = { selectedMinute = it },
+                            valueLabel = { "%02d".format(it) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = {
+                            onTimeSelected(LocalTime.of(selectedHour, selectedMinute))
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26A69A))
+                    ) {
+                        Text("确定", color = Color.White)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onTimeSelected(LocalTime.of(timePickerState.hour, timePickerState.minute))
-                onDismiss()
-            }) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
         }
-    )
+    }
+}
+
+@Composable
+private fun MiuixWheelPicker(
+    values: List<Int>,
+    selectedValue: Int,
+    onValueChange: (Int) -> Unit,
+    valueLabel: (Int) -> String,
+    modifier: Modifier = Modifier,
+    itemHeight: Dp = 42.dp
+) {
+    val visibleItems = 5
+    val centerPadding = visibleItems / 2
+    val displayValues = remember(values) {
+        List(centerPadding) { null } + values.map<Int, Int?> { it } + List(centerPadding) { null }
+    }
+    val initialIndex = remember(values, selectedValue) {
+        values.indexOf(selectedValue).coerceAtLeast(0)
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val density = LocalDensity.current
+    val itemHeightPx = with(density) { itemHeight.toPx() }
+    val scope = rememberCoroutineScope()
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
+    fun nearestValueIndex(): Int {
+        if (values.isEmpty()) return 0
+        val scrollRows = (listState.firstVisibleItemScrollOffset / itemHeightPx).roundToInt()
+        return (listState.firstVisibleItemIndex + scrollRows).coerceIn(values.indices)
+    }
+
+    LaunchedEffect(values, listState, itemHeightPx) {
+        snapshotFlow { nearestValueIndex() }
+            .distinctUntilChanged()
+            .collect { index ->
+                values.getOrNull(index)?.let(latestOnValueChange)
+            }
+    }
+
+    LaunchedEffect(values, listState, itemHeightPx) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { isScrolling ->
+                if (!isScrolling && listState.firstVisibleItemScrollOffset != 0) {
+                    listState.animateScrollToItem(nearestValueIndex())
+                }
+            }
+    }
+
+    Box(
+        modifier = modifier
+            .height(itemHeight * visibleItems)
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f))
+            .border(
+                BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)),
+                RoundedCornerShape(22.dp)
+            )
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            userScrollEnabled = true
+        ) {
+            itemsIndexed(
+                items = displayValues,
+                key = { index, value -> value?.let { "value-$it" } ?: "pad-$index" }
+            ) { index, value ->
+                val valueIndex = index - centerPadding
+                val distance = abs(valueIndex - values.indexOf(selectedValue))
+                val isSelected = value == selectedValue
+                val contentColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = when (distance) {
+                            1 -> 0.72f
+                            2 -> 0.42f
+                            else -> 0.24f
+                        }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .clickable(enabled = value != null) {
+                            val targetIndex = valueIndex.coerceIn(values.indices)
+                            values.getOrNull(targetIndex)?.let(latestOnValueChange)
+                            scope.launch { listState.animateScrollToItem(targetIndex) }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (value != null) {
+                        Text(
+                            text = valueLabel(value),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            style = if (isSelected) {
+                                MaterialTheme.typography.headlineSmall
+                            } else {
+                                MaterialTheme.typography.titleMedium
+                            },
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = contentColor
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .height(itemHeight)
+                .padding(horizontal = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+                .border(
+                    BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+                    RoundedCornerShape(16.dp)
+                )
+        )
+    }
 }
