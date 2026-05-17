@@ -1,10 +1,8 @@
 package com.yueming.baby.ui.components
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,8 +35,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -229,77 +225,6 @@ fun BabyBrandWordmark(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-@Composable
-fun BabyIllustrationCard(
-    @DrawableRes imageRes: Int,
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier,
-    badge: String? = null,
-    accent: Color = BabyPalette.Rose,
-    onClick: (() -> Unit)? = null
-) {
-    val content: @Composable BoxScope.() -> Unit = {
-        Image(
-            painter = painterResource(imageRes),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.18f))
-                    )
-                )
-        )
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (badge != null) {
-                BabyPill(text = badge, accent = accent, containerColor = Color.White.copy(alpha = 0.76f))
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-
-    if (onClick == null) {
-        BabySoftCard(
-            modifier = modifier,
-            shape = RoundedCornerShape(30.dp),
-            color = BabyPalette.RoseSoft.copy(alpha = 0.72f),
-            borderColor = accent.copy(alpha = 0.18f),
-            content = content
-        )
-    } else {
-        BabyPressCard(
-            onClick = onClick,
-            modifier = modifier,
-            shape = RoundedCornerShape(30.dp),
-            color = BabyPalette.RoseSoft.copy(alpha = 0.72f),
-            pressedColor = accent.copy(alpha = 0.12f),
-            content = content
-        )
     }
 }
 

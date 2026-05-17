@@ -105,14 +105,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.yueming.baby.R
 import com.yueming.baby.ui.components.BabyBrandWordmark
-import com.yueming.baby.ui.components.BabyIllustrationCard
 import com.yueming.baby.ui.components.BabyMetricChip
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabyPill
 import com.yueming.baby.ui.components.BabySectionHeader
-import com.yueming.baby.ui.components.BabySoftCard
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.PhotoEntry
 import com.yueming.baby.data.belongsToBaby
@@ -984,15 +981,48 @@ fun PhotosScreen() {
                             BabyBrandWordmark(
                                 subtitle = "${babyInfo.nickname.ifBlank { "宝宝" }}的成长相册"
                             )
-                            BabyIllustrationCard(
-                                imageRes = R.drawable.ill_memory_star,
-                                title = "还没有回忆",
-                                subtitle = "点击右下角 +，一次选择照片和视频，把今天的小瞬间放进相册。",
-                                badge = "Memories",
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(220.dp)
-                            )
+                                    .padding(horizontal = 8.dp),
+                                shape = RoundedCornerShape(30.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                border = BorderStroke(
+                                    0.6.dp,
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 26.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(76.dp)
+                                            .clip(RoundedCornerShape(28.dp))
+                                            .background(BabyPalette.Rose.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Collections,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(34.dp),
+                                            tint = BabyPalette.Rose
+                                        )
+                                    }
+                                    Text(
+                                        text = "还没有照片或视频",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "点击右下角 +，一次选择照片和视频，把今天的小瞬间放进相册。",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }

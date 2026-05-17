@@ -50,11 +50,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
-import com.yueming.baby.R
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
-import com.yueming.baby.ui.components.BabyIllustrationCard
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
@@ -112,16 +110,72 @@ private fun TimelineHeroCard(
     totalCount: Int,
     activeCategoryLabel: String
 ) {
-    BabyIllustrationCard(
-        imageRes = R.drawable.ill_timeline_milestones,
-        title = "${nickname.ifBlank { "宝宝" }}的成长时光",
-        subtitle = "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
-        badge = "Timeline",
-        accent = primaryPink,
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(138.dp)
-    )
+            .heightIn(min = 118.dp),
+        shape = RoundedCornerShape(32.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+        ),
+        border = BorderStroke(0.6.dp, primaryPink.copy(alpha = 0.18f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(primaryPink.copy(alpha = 0.13f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = primaryPink
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "${nickname.ifBlank { "宝宝" }}的成长时光",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = primaryPink.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "Timeline",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryPink
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -394,15 +448,40 @@ fun TimelineScreen() {
                     Modifier.fillMaxSize().padding(end = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    BabyIllustrationCard(
-                        imageRes = R.drawable.ill_timeline_milestones,
-                        title = "还没有记录",
-                        subtitle = "添加第一条时间线，记录宝宝的每一个珍贵时刻。",
-                        badge = "New Memory",
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
-                    )
+                            .padding(horizontal = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(primaryPink.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(34.dp),
+                                tint = primaryPink
+                            )
+                        }
+                        Text(
+                            text = "还没有记录",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "添加第一条时间线，记录宝宝的每一个珍贵时刻。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {

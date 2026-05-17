@@ -38,14 +38,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.yueming.baby.R
 import com.yueming.baby.data.*
 import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
-import com.yueming.baby.ui.components.BabyIllustrationCard
-import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
@@ -447,16 +444,6 @@ private fun MiuixSettingsHeader(
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onBackground
-        )
-        BabyIllustrationCard(
-            imageRes = R.drawable.ill_settings_care,
-            title = "照护中心",
-            subtitle = "管理宝宝资料、同步、AI 和记录分类。",
-            badge = "Settings",
-            accent = BabyPalette.Mint,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(132.dp)
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),

@@ -63,16 +63,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import com.yueming.baby.R
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
-import com.yueming.baby.ui.components.BabyIllustrationCard
-import com.yueming.baby.ui.components.BabyMetricChip
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabySectionHeader
-import com.yueming.baby.ui.components.BabySoftCard
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.babyPageBackground
@@ -255,14 +251,21 @@ fun DashboardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                BabyIllustrationCard(
-                    imageRes = R.drawable.ill_home_memory,
-                    title = "欢迎来到 babybuddy",
-                    subtitle = "记录每一次微笑、喂养、复查和成长节点。",
-                    badge = "Baby Care",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(230.dp)
+                Icon(
+                    Icons.Default.ChildCare,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = BabyPalette.Rose.copy(alpha = 0.55f)
+                )
+                Text(
+                    "欢迎来到 babybuddy",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "记录宝宝的成长点滴，从添加第一个宝宝开始",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(20.dp))
                 Button(
@@ -521,16 +524,9 @@ private fun DashboardTodaySummary(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "今日照护",
+                    "$greeting，${babyInfo.nickname.ifBlank { "宝宝" }}的家长",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "$greeting，${babyInfo.nickname.ifBlank { "宝宝" }}的家长",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
                 )
             }
             BabySwitcher(
@@ -540,17 +536,6 @@ private fun DashboardTodaySummary(
                 onAddBaby = onAddBaby
             )
         }
-
-        BabyIllustrationCard(
-            imageRes = R.drawable.ill_home_memory,
-            title = "今天的照护记忆",
-            subtitle = "今天也把${babyInfo.nickname.ifBlank { "宝宝" }}的小事照顾好。",
-            badge = "Today",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(142.dp),
-            accent = BabyPalette.Rose
-        )
 
         Card(
             modifier = Modifier.fillMaxWidth(),

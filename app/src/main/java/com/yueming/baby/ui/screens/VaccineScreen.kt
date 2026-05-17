@@ -34,10 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
-import com.yueming.baby.R
 import com.yueming.baby.data.*
-import com.yueming.baby.ui.components.BabyIllustrationCard
-import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
@@ -123,19 +120,6 @@ fun VaccineScreen(onDismiss: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            item {
-                BabyIllustrationCard(
-                    imageRes = R.drawable.ill_timeline_milestones,
-                    title = "疫苗里程碑",
-                    subtitle = "${babyInfo.nickname.ifBlank { "宝宝" }}现在 ${ageMonths} 个月，已完成 ${doneMap.size} 针。",
-                    badge = "Vaccine",
-                    accent = BabyPalette.Mint,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(132.dp)
-                        .animateItem()
-                )
-            }
             // Age header
             item {
                 Card(

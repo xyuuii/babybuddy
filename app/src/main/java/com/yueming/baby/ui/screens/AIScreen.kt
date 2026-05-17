@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,8 +79,6 @@ import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.ChatMessage
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
-import com.yueming.baby.R
-import com.yueming.baby.ui.components.BabyIllustrationCard
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.MarkdownText
 import com.yueming.baby.ui.components.babyPageBackground
@@ -292,15 +291,13 @@ private fun WelcomeContent(
             .padding(top = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BabyIllustrationCard(
-            imageRes = R.drawable.ill_ai_cloud,
+        AssistantIntroCard(
             title = "AI 成长助手",
             subtitle = babyContextSummary,
             badge = "Ask BabyBuddy",
-            accent = BabyPalette.Blue,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(176.dp)
+                .heightIn(min = 146.dp)
         )
         Spacer(Modifier.height(18.dp))
         Text(
@@ -475,6 +472,75 @@ private fun AssistantAvatar(isActive: Boolean) {
 }
 
 @Composable
+private fun AssistantIntroCard(
+    title: String,
+    subtitle: String,
+    badge: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(30.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        border = BorderStroke(0.6.dp, BabyPalette.Blue.copy(alpha = 0.22f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(BabyPalette.Blue.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.SmartToy,
+                    contentDescription = null,
+                    tint = BabyPalette.Blue,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = BabyPalette.Blue.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = badge,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = BabyPalette.Blue
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun UserAvatar() {
     Box(
         modifier = Modifier
@@ -615,15 +681,13 @@ private fun NotConfiguredView() {
             .padding(28.dp),
         contentAlignment = Alignment.Center
     ) {
-        BabyIllustrationCard(
-            imageRes = R.drawable.ill_ai_cloud,
+        AssistantIntroCard(
             title = "先配置一个 AI Profile",
             subtitle = "配置 API Key 后，AI 助手会结合宝宝资料、成长记录、喂养和疫苗状态给出建议。",
             badge = "AI",
-            accent = BabyPalette.Blue,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
+                .heightIn(min = 188.dp)
         )
     }
 }
