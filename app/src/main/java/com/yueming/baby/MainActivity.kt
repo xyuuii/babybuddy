@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -48,6 +49,7 @@ import com.yueming.baby.ui.motion.miuixPressable
 import com.yueming.baby.ui.screens.*
 import com.yueming.baby.ui.theme.YueMingTheme
 import com.yueming.baby.ui.theme.ThemeMode
+import kotlinx.coroutines.launch
 import java.io.StringWriter
 import java.io.PrintWriter
 
@@ -214,6 +216,8 @@ private fun RowScope.YueMingNavigationBarItem(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val tapPulse = remember { Animatable(1f) }
     val selectedProgress by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
@@ -248,7 +252,14 @@ private fun RowScope.YueMingNavigationBarItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    scope.launch {
+                        tapPulse.snapTo(0.88f)
+                        tapPulse.animateTo(1.14f, tween(durationMillis = 120, easing = FastOutSlowInEasing))
+                        tapPulse.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
+                    }
+                    onClick()
+                }
             )
             .padding(horizontal = 2.dp, vertical = 1.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -270,9 +281,10 @@ private fun RowScope.YueMingNavigationBarItem(
                     .size(21.dp)
                     .graphicsLayer {
                         alpha = 0.78f + 0.22f * selectedProgress
-                        scaleX = 0.94f + 0.08f * selectedProgress
-                        scaleY = 0.94f + 0.08f * selectedProgress
+                        scaleX = (0.94f + 0.08f * selectedProgress) * tapPulse.value
+                        scaleY = (0.94f + 0.08f * selectedProgress) * tapPulse.value
                         translationY = -2f * selectedProgress
+                        rotationZ = 5f * (tapPulse.value - 1f)
                     }
             )
         }
