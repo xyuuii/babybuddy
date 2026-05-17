@@ -1,15 +1,13 @@
 package com.yueming.baby.ui.screens
 
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -56,9 +54,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Delete
@@ -70,7 +66,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -159,6 +154,20 @@ private fun PhotoEntry.isVideoMedia(): Boolean {
 }
 
 private fun PhotoEntry.previewModel(): String = thumbnailPath ?: url
+
+private fun Uri.isVideoMediaUri(context: Context): Boolean {
+    val mimeType = runCatching { context.contentResolver.getType(this) }
+        .getOrNull()
+        .orEmpty()
+        .lowercase()
+    if (mimeType.startsWith("video/")) return true
+    if (mimeType.startsWith("image/")) return false
+
+    val cleanUri = toString().substringBefore('?').substringBefore('#').lowercase()
+    return listOf(".mp4", ".webm", ".mov", ".m4v", ".3gp", ".mkv", ".avi").any {
+        cleanUri.endsWith(it)
+    }
+}
 
 private fun parsePhotoDate(raw: String): LocalDate? {
     return runCatching { LocalDate.parse(raw, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
@@ -527,8 +536,6 @@ fun PhotosScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var showUpload by remember { mutableStateOf(false) }
-    var photoCaption by rememberSaveable { mutableStateOf("") }
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var viewerVisible by rememberSaveable { mutableStateOf(false) }
     var selectionMode by rememberSaveable { mutableStateOf(false) }
@@ -575,68 +582,38 @@ fun PhotosScreen() {
         }
     }
 
-    val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    val mediaPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris: List<Uri> ->
         if (babyInfo.id.isEmpty()) {
             Toast.makeText(context, "请先添加宝宝信息", Toast.LENGTH_SHORT).show()
             return@rememberLauncherForActivityResult
         }
-        if (uri != null) {
+        uris.forEach { uri ->
+            val isVideo = uri.isVideoMediaUri(context)
             val id = "photo-${UUID.randomUUID().toString().take(8)}"
             uploadingIds = uploadingIds + id
             scope.launch {
                 val (localUrl, thumbnailPath) = withContext(Dispatchers.IO) {
-                    val localPath = DataManager.copyPhotoToInternalStorage(uri)
-                    val thumb = ThumbnailManager.generateThumbnail(context, uri, isVideo = false)
+                    val localPath = if (isVideo) {
+                        DataManager.copyVideoToInternalStorage(uri)
+                    } else {
+                        DataManager.copyPhotoToInternalStorage(uri)
+                    }
+                    val thumb = ThumbnailManager.generateThumbnail(context, uri, isVideo = isVideo)
                     (localPath ?: uri.toString()) to thumb
                 }
                 DataManager.addPhoto(
                     PhotoEntry(
                         id = id,
                         url = localUrl,
-                        caption = photoCaption.ifBlank { "照片" },
+                        caption = if (isVideo) "视频" else "照片",
                         date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-                        tags = emptyList(),
+                        tags = if (isVideo) listOf("视频") else emptyList(),
                         thumbnailPath = thumbnailPath,
-                        mediaType = "photo"
+                        mediaType = if (isVideo) "video" else "photo"
                     )
                 )
-                photoCaption = ""
-                showUpload = false
-            }
-        }
-    }
-
-    val videoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (babyInfo.id.isEmpty()) {
-            Toast.makeText(context, "请先添加宝宝信息", Toast.LENGTH_SHORT).show()
-            return@rememberLauncherForActivityResult
-        }
-        if (uri != null) {
-            val id = "photo-${UUID.randomUUID().toString().take(8)}"
-            uploadingIds = uploadingIds + id
-            scope.launch {
-                val (localUrl, thumbnailPath) = withContext(Dispatchers.IO) {
-                    val localPath = DataManager.copyVideoToInternalStorage(uri)
-                    val thumb = ThumbnailManager.generateThumbnail(context, uri, isVideo = true)
-                    (localPath ?: uri.toString()) to thumb
-                }
-                DataManager.addPhoto(
-                    PhotoEntry(
-                        id = id,
-                        url = localUrl,
-                        caption = photoCaption.ifBlank { "视频" },
-                        date = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE),
-                        tags = listOf("视频"),
-                        thumbnailPath = thumbnailPath,
-                        mediaType = "video"
-                    )
-                )
-                photoCaption = ""
-                showUpload = false
             }
         }
     }
@@ -660,9 +637,17 @@ fun PhotosScreen() {
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
         floatingActionButton = {
-            if (!showUpload && !selectionMode) {
+            if (!selectionMode) {
                 FloatingActionButton(
-                    onClick = { showUpload = true },
+                    onClick = {
+                        if (babyInfo.id.isEmpty()) {
+                            Toast.makeText(context, "请先添加宝宝信息", Toast.LENGTH_SHORT).show()
+                        } else {
+                            mediaPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                            )
+                        }
+                    },
                     modifier = Modifier.miuixFadeSlideIn(delayMillis = 120, initialTranslationY = 22f),
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -712,94 +697,6 @@ fun PhotosScreen() {
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(8.dp))
-
-            AnimatedVisibility(
-                visible = showUpload,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .miuixFadeSlideIn(initialTranslationY = 12f),
-                    shape = RoundedCornerShape(28.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-                    ),
-                    border = BorderStroke(
-                        0.5.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "添加媒体",
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            IconButton(
-                                onClick = { showUpload = false },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "关闭")
-                            }
-                        }
-                        OutlinedTextField(
-                            value = photoCaption,
-                            onValueChange = { photoCaption = it },
-                            label = { Text("描述（可选）") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(18.dp)
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            FilledTonalButton(
-                                onClick = { photoPicker.launch("image/*") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoLibrary,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("照片", fontSize = 14.sp)
-                            }
-                            FilledTonalButton(
-                                onClick = { videoPicker.launch("video/*") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("视频", fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            }
 
             when {
                 isLoading -> {
