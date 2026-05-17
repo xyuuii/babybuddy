@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -49,7 +48,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1063,6 +1061,7 @@ private fun ReminderEditorDialog(
     var notify by remember(reminder?.id) { mutableStateOf(reminder?.notify ?: true) }
     var addToCalendar by remember(reminder?.id) { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     val parsedTime = parseReminderTime(timeText)
     val canSave = title.trim().isNotEmpty() && parsedTime != null
 
@@ -1171,23 +1170,9 @@ private fun ReminderEditorDialog(
                     )
                     ReminderTimeField(
                         value = timeText,
-                        isError = parsedTime == null,
-                        onValueChange = { input -> timeText = input.filter { it.isDigit() || it == ':' }.take(5) },
+                        onClick = { showTimePicker = true },
                         modifier = Modifier.weight(1f)
                     )
-                }
-
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("09:00", "14:00", "20:00").forEach { time ->
-                        item {
-                            FilterChip(
-                                selected = timeText == time,
-                                onClick = { timeText = time },
-                                label = { Text(time) },
-                                leadingIcon = { Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp)) }
-                            )
-                        }
-                    }
                 }
 
                 OutlinedTextField(
@@ -1268,6 +1253,16 @@ private fun ReminderEditorDialog(
             onDismiss = { showDatePicker = false }
         )
     }
+
+    if (showTimePicker) {
+        YueMingTimePicker(
+            initialTime = parsedTime ?: LocalTime.of(9, 0),
+            onTimeSelected = { selectedTime ->
+                timeText = selectedTime.format(REMINDER_EDITOR_TIME_FORMATTER)
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
 }
 
 @Composable
@@ -1324,26 +1319,24 @@ private fun ReminderPickerField(
 @Composable
 private fun ReminderTimeField(
     value: String,
-    isError: Boolean,
-    onValueChange: (String) -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ReminderFieldFrame(modifier = modifier, isError = isError) {
-        Icon(Icons.Default.AccessTime, null, Modifier.size(18.dp), tint = fieldAccentColor(isError))
+    ReminderFieldFrame(
+        modifier = modifier.clickable(onClick = onClick),
+        isError = false
+    ) {
+        Icon(Icons.Default.AccessTime, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            Text("时间", style = MaterialTheme.typography.labelSmall, color = fieldAccentColor(isError))
+            Text("时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(2.dp))
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                    fontWeight = MaterialTheme.typography.bodyLarge.fontWeight
-                ),
-                modifier = Modifier.fillMaxWidth()
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1366,11 +1359,6 @@ private fun ReminderFieldFrame(
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
-}
-
-@Composable
-private fun fieldAccentColor(isError: Boolean): Color {
-    return if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
 }
 
 private fun parseReminderTime(value: String): LocalTime? {
@@ -2239,4 +2227,39 @@ fun YueMingDatePicker(
     ) {
         DatePicker(state = datePickerState)
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun YueMingTimePicker(
+    initialTime: LocalTime,
+    onTimeSelected: (LocalTime) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialTime.hour,
+        initialMinute = initialTime.minute,
+        is24Hour = true
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择时间", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                TimePicker(state = timePickerState)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onTimeSelected(LocalTime.of(timePickerState.hour, timePickerState.minute))
+                onDismiss()
+            }) { Text("确定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
