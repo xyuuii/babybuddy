@@ -14,6 +14,7 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -23,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1159,23 +1162,18 @@ private fun ReminderEditorDialog(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
+                    ReminderPickerField(
+                        label = "日期",
+                        value = "%02d/%02d".format(dueDate.monthValue, dueDate.dayOfMonth),
+                        icon = Icons.Default.CalendarToday,
                         onClick = { showDatePicker = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("%02d/%02d".format(dueDate.monthValue, dueDate.dayOfMonth), maxLines = 1)
-                    }
-                    OutlinedTextField(
+                        modifier = Modifier.weight(1f)
+                    )
+                    ReminderTimeField(
                         value = timeText,
-                        onValueChange = { input -> timeText = input.filter { it.isDigit() || it == ':' }.take(5) },
-                        label = { Text("时间") },
-                        singleLine = true,
                         isError = parsedTime == null,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        onValueChange = { input -> timeText = input.filter { it.isDigit() || it == ':' }.take(5) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -1293,6 +1291,86 @@ private fun ReminderSwitchRow(
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@Composable
+private fun ReminderPickerField(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ReminderFieldFrame(
+        modifier = modifier.clickable(onClick = onClick),
+        isError = false
+    ) {
+        Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReminderTimeField(
+    value: String,
+    isError: Boolean,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ReminderFieldFrame(modifier = modifier, isError = isError) {
+        Icon(Icons.Default.AccessTime, null, Modifier.size(18.dp), tint = fieldAccentColor(isError))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text("时间", style = MaterialTheme.typography.labelSmall, color = fieldAccentColor(isError))
+            Spacer(Modifier.height(2.dp))
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    fontWeight = MaterialTheme.typography.bodyLarge.fontWeight
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReminderFieldFrame(
+    modifier: Modifier = Modifier,
+    isError: Boolean,
+    content: @Composable RowScope.() -> Unit
+) {
+    val borderColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline.copy(alpha = 0.62f)
+    Row(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+@Composable
+private fun fieldAccentColor(isError: Boolean): Color {
+    return if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
 }
 
 private fun parseReminderTime(value: String): LocalTime? {
