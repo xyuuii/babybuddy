@@ -1,5 +1,11 @@
 ﻿package com.yueming.baby.ui.screens
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.CalendarContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,12 +27,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.rememberDatePickerState
 import java.time.Instant
 import java.time.ZoneId
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
@@ -58,6 +69,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
+private val REMINDER_EDITOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
 fun DashboardScreen() {
@@ -67,6 +79,7 @@ fun DashboardScreen() {
     val photos by DataManager.photos.collectAsState()
     val feedingRecords by DataManager.feedingRecords.collectAsState()
     val vaccineStatuses by DataManager.vaccineStatuses.collectAsState()
+    val reminders by DataManager.reminders.collectAsState()
     val isLoading by DataManager.isLoading.collectAsState()
 
     val activeTimeline = remember(timeline, babyInfo.id) {
@@ -77,6 +90,12 @@ fun DashboardScreen() {
     }
     val activeFeedingRecords = remember(feedingRecords, babyInfo.id) {
         feedingRecords.filter { belongsToBaby(it.babyId, babyInfo.id) }
+    }
+    val activeReminderCount = remember(reminders, babyInfo.id) {
+        reminders.count { belongsToBaby(it.babyId, babyInfo.id) && !it.isCompleted }
+    }
+    val activeUpcomingReminders = remember(reminders, babyInfo.id) {
+        upcomingReminders(reminders, babyInfo.id, limit = 3)
     }
 
     val ageMonths = remember(babyInfo.birthDate) { DataManager.getAgeInMonths(babyInfo.birthDate) }
@@ -146,6 +165,42 @@ fun DashboardScreen() {
     var dashboardPreviewVideoPath by remember { mutableStateOf<String?>(null) }
     var showFeedingScreen by remember { mutableStateOf(false) }
     var showVaccineScreen by remember { mutableStateOf(false) }
+    var showReminderEditor by remember { mutableStateOf(false) }
+    var editingReminder by remember { mutableStateOf<Reminder?>(null) }
+    var pendingReminderSave by remember { mutableStateOf<Pair<Reminder, Boolean>?>(null) }
+
+    fun persistReminder(reminder: Reminder, addToCalendar: Boolean) {
+        DataManager.upsertReminder(reminder)
+        if (addToCalendar) {
+            launchReminderCalendarInsert(context, reminder)
+        }
+        Toast.makeText(context, "提醒已保存", Toast.LENGTH_SHORT).show()
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        pendingReminderSave?.let { (reminder, addToCalendar) ->
+            val finalReminder = if (granted) reminder else reminder.copy(notify = false)
+            if (!granted) {
+                Toast.makeText(context, "通知权限未开启，提醒会保存在首页待办", Toast.LENGTH_SHORT).show()
+            }
+            persistReminder(finalReminder, addToCalendar)
+        }
+        pendingReminderSave = null
+    }
+
+    fun saveReminder(reminder: Reminder, addToCalendar: Boolean) {
+        val needsNotificationPermission = reminder.notify &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsNotificationPermission) {
+            pendingReminderSave = reminder to addToCalendar
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            persistReminder(reminder, addToCalendar)
+        }
+    }
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -269,6 +324,24 @@ fun DashboardScreen() {
                     onAddBaby = { showAddBaby = true }
                 )
             }
+        }
+
+        item {
+            ReminderDashboardPanel(
+                reminders = activeUpcomingReminders,
+                openCount = activeReminderCount,
+                onAdd = {
+                    editingReminder = null
+                    showReminderEditor = true
+                },
+                onEdit = { reminder ->
+                    editingReminder = reminder
+                    showReminderEditor = true
+                },
+                onComplete = { DataManager.completeReminder(it.id) },
+                onDelete = { DataManager.deleteReminder(it.id) },
+                modifier = Modifier.animateItem()
+            )
         }
 
         item {
@@ -573,6 +646,22 @@ fun DashboardScreen() {
     }
     }
 
+    if (showReminderEditor) {
+        ReminderEditorDialog(
+            babyId = babyInfo.id,
+            reminder = editingReminder,
+            onDismiss = {
+                showReminderEditor = false
+                editingReminder = null
+            },
+            onSave = { reminder, addToCalendar ->
+                saveReminder(reminder, addToCalendar)
+                showReminderEditor = false
+                editingReminder = null
+            }
+        )
+    }
+
     // Add Baby Dialog
     if (showAddBaby) {
         AddBabyDialog(
@@ -800,6 +889,451 @@ private fun PhotoEntry.isVideoMedia(): Boolean {
     }
     val cleanUrl = url.substringBefore('?').substringBefore('#').lowercase()
     return listOf(".mp4", ".webm", ".mov", ".m4v", ".3gp", ".mkv").any { cleanUrl.endsWith(it) }
+}
+
+@Composable
+private fun ReminderDashboardPanel(
+    reminders: List<Reminder>,
+    openCount: Int,
+    onAdd: () -> Unit,
+    onEdit: (Reminder) -> Unit,
+    onComplete: (Reminder) -> Unit,
+    onDelete: (Reminder) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = Color(0xFF26A69A)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(30.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.24f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Notifications, null, Modifier.size(19.dp), tint = accent)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("待办提醒", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (openCount > 0) "$openCount 条待处理" else "复查、疫苗和用药都可以放这里",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onAdd,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(accent.copy(alpha = 0.12f))
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "添加提醒", tint = accent)
+                }
+            }
+
+            if (reminders.isEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
+                        .clickable(onClick = onAdd)
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.EventNote, null, Modifier.size(22.dp), tint = accent)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("添加一条复查提醒", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text("例如：两周后复查血常规", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                reminders.forEach { reminder ->
+                    ReminderDashboardRow(
+                        reminder = reminder,
+                        onEdit = { onEdit(reminder) },
+                        onComplete = { onComplete(reminder) },
+                        onDelete = { onDelete(reminder) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderDashboardRow(
+    reminder: Reminder,
+    onEdit: () -> Unit,
+    onComplete: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val accent = Color(reminderCategoryColor(reminder.category))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = onComplete,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "完成提醒", tint = accent)
+        }
+        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(accent.copy(alpha = 0.13f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(reminderCategoryIcon(reminder.category), null, Modifier.size(18.dp), tint = accent)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    reminder.title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                DashboardPill(reminderDueText(reminder.dueAt), accent)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                listOf(reminderCategoryLabel(reminder.category), reminder.notes).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+            Icon(Icons.Default.DeleteOutline, contentDescription = "删除提醒", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderEditorDialog(
+    babyId: String,
+    reminder: Reminder?,
+    onDismiss: () -> Unit,
+    onSave: (Reminder, Boolean) -> Unit
+) {
+    val now = remember { System.currentTimeMillis() }
+    val initialDueAt = remember(reminder?.id) { reminder?.dueAt ?: defaultReminderDueAt(now) }
+    val initialDateTime = remember(initialDueAt) {
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(initialDueAt), ZoneId.systemDefault())
+    }
+    var title by remember(reminder?.id) { mutableStateOf(reminder?.title ?: "复查血常规") }
+    var category by remember(reminder?.id) { mutableStateOf(reminder?.category ?: REMINDER_CATEGORY_CHECKUP) }
+    var notes by remember(reminder?.id) { mutableStateOf(reminder?.notes ?: "") }
+    var dueDate by remember(reminder?.id) { mutableStateOf(initialDateTime.toLocalDate()) }
+    var timeText by remember(reminder?.id) { mutableStateOf(initialDateTime.toLocalTime().format(REMINDER_EDITOR_TIME_FORMATTER)) }
+    var notify by remember(reminder?.id) { mutableStateOf(reminder?.notify ?: true) }
+    var addToCalendar by remember(reminder?.id) { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val parsedTime = parseReminderTime(timeText)
+    val canSave = title.trim().isNotEmpty() && parsedTime != null
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .heightIn(max = 620.dp),
+            shape = RoundedCornerShape(28.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.EventNote, null, Modifier.size(24.dp), tint = Color(0xFF26A69A))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (reminder == null) "添加提醒" else "编辑提醒",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "关闭")
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("事项") },
+                    placeholder = { Text("例如：复查血常规") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(REMINDER_CATEGORIES, key = { it.id }) { item ->
+                        FilterChip(
+                            selected = category == item.id,
+                            onClick = { category = item.id },
+                            label = { Text(item.label) },
+                            leadingIcon = {
+                                Icon(reminderCategoryIcon(item.id), null, Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                }
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        AssistChip(
+                            onClick = {
+                                dueDate = LocalDate.now()
+                                timeText = "09:00"
+                            },
+                            label = { Text("今天") },
+                            leadingIcon = { Icon(Icons.Default.Today, null, Modifier.size(16.dp)) }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            onClick = {
+                                dueDate = LocalDate.now().plusDays(1)
+                                timeText = "09:00"
+                            },
+                            label = { Text("明天") },
+                            leadingIcon = { Icon(Icons.Default.WbSunny, null, Modifier.size(16.dp)) }
+                        )
+                    }
+                    item {
+                        AssistChip(
+                            onClick = {
+                                dueDate = LocalDate.now().plusDays(14)
+                                timeText = "09:00"
+                            },
+                            label = { Text("2周后") },
+                            leadingIcon = { Icon(Icons.Default.EventRepeat, null, Modifier.size(16.dp)) }
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("%02d/%02d".format(dueDate.monthValue, dueDate.dayOfMonth), maxLines = 1)
+                    }
+                    OutlinedTextField(
+                        value = timeText,
+                        onValueChange = { input -> timeText = input.filter { it.isDigit() || it == ':' }.take(5) },
+                        label = { Text("时间") },
+                        singleLine = true,
+                        isError = parsedTime == null,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("09:00", "14:00", "20:00").forEach { time ->
+                        item {
+                            FilterChip(
+                                selected = timeText == time,
+                                onClick = { timeText = time },
+                                label = { Text(time) },
+                                leadingIcon = { Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp)) }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("备注") },
+                    placeholder = { Text("地点、医生交代或注意事项") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                ReminderSwitchRow(
+                    icon = Icons.Default.Notifications,
+                    title = "到时间发通知",
+                    checked = notify,
+                    onCheckedChange = { notify = it }
+                )
+                ReminderSwitchRow(
+                    icon = Icons.Default.CalendarMonth,
+                    title = "同时添加到系统日历",
+                    checked = addToCalendar,
+                    onCheckedChange = { addToCalendar = it }
+                )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = {
+                            val time = parsedTime ?: return@Button
+                            val dueAt = dueDate
+                                .atTime(time)
+                                .atZone(ZoneId.systemDefault())
+                                .toInstant()
+                                .toEpochMilli()
+                            onSave(
+                                Reminder(
+                                    id = reminder?.id ?: "reminder-${UUID.randomUUID().toString().take(8)}",
+                                    babyId = reminder?.babyId?.takeIf { it.isNotBlank() } ?: babyId,
+                                    title = title.trim(),
+                                    dueAt = dueAt,
+                                    category = category,
+                                    notes = notes.trim(),
+                                    notify = notify,
+                                    calendarSynced = reminder?.calendarSynced == true || addToCalendar,
+                                    completedAt = reminder?.completedAt,
+                                    createdAt = reminder?.createdAt ?: System.currentTimeMillis()
+                                ),
+                                addToCalendar
+                            )
+                        },
+                        enabled = canSave,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26A69A))
+                    ) {
+                        Text("保存", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        YueMingDatePicker(
+            initialDate = dueDate,
+            onDateSelected = { dueDate = it },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+}
+
+@Composable
+private fun ReminderSwitchRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(10.dp))
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+private fun parseReminderTime(value: String): LocalTime? {
+    val parts = value.split(":")
+    if (parts.size != 2) return null
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return LocalTime.of(hour, minute)
+}
+
+private fun reminderCategoryIcon(category: String): ImageVector {
+    return when (category) {
+        REMINDER_CATEGORY_CHECKUP -> Icons.Default.MedicalServices
+        REMINDER_CATEGORY_VACCINE -> Icons.Default.Vaccines
+        REMINDER_CATEGORY_MEDICINE -> Icons.Default.Medication
+        REMINDER_CATEGORY_TEST -> Icons.Default.Science
+        else -> Icons.AutoMirrored.Filled.EventNote
+    }
+}
+
+private fun launchReminderCalendarInsert(context: android.content.Context, reminder: Reminder) {
+    val description = buildString {
+        append(reminderCategoryLabel(reminder.category))
+        if (reminder.notes.isNotBlank()) {
+            append("\n")
+            append(reminder.notes)
+        }
+    }
+    val intent = Intent(Intent.ACTION_INSERT).apply {
+        data = CalendarContract.Events.CONTENT_URI
+        putExtra(CalendarContract.Events.TITLE, reminder.title)
+        putExtra(CalendarContract.Events.DESCRIPTION, description)
+        putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, reminder.dueAt)
+        putExtra(CalendarContract.EXTRA_EVENT_END_TIME, reminder.dueAt + 30 * 60 * 1000L)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "没有找到可用的日历应用", Toast.LENGTH_SHORT).show()
+    }
 }
 
 @Composable
