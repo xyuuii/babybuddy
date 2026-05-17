@@ -176,7 +176,17 @@ fun YueMingApp() {
                 fadeOut(animationSpec = tween(80))
             }
         ) {
-            composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Dashboard.route) {
+                DashboardScreen(
+                    onOpenTimeline = {
+                        navController.navigate(Screen.Timeline.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
             composable(Screen.Timeline.route) { TimelineScreen() }
             composable(Screen.Photos.route) { PhotosScreen() }
             composable(Screen.AI.route) { AIScreen() }

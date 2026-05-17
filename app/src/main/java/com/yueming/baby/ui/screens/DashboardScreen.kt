@@ -81,7 +81,9 @@ private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
 private val REMINDER_EDITOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(
+    onOpenTimeline: () -> Unit = {}
+) {
     val babies by DataManager.babies.collectAsState()
     val babyInfo by DataManager.babyInfo.collectAsState()
     val timeline by DataManager.timeline.collectAsState()
@@ -257,402 +259,105 @@ fun DashboardScreen() {
             }
         }
     } else {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "${DataManager.getGreeting()}，${babyInfo.nickname}的家长",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Medium
-                )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(34.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    babyInfo.nickname.ifBlank { "宝宝" },
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "今天 $animatedDays 天大 · 已记录 $animatedTimeline 条成长瞬间",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .clip(RoundedCornerShape(26.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                                    .clickable { avatarPicker.launch("image/*") },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (babyInfo.avatar != null) {
-                                    AuthenticatedAsyncImage(
-                                        model = babyInfo.avatar,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Text(
-                                        babyInfo.nickname.take(1).ifBlank { "宝" },
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 28.sp
-                                    )
-                                }
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DashboardInfoChip("月龄", "$animatedAgeMonths 个月", Color(0xFFEC407A))
-                            DashboardInfoChip("照片", "$animatedPhotos 张", Color(0xFF42A5F5))
-                            DashboardInfoChip("喂养", "${todayFeeding.size} 次", Color(0xFFF6BA6D))
-                        }
-                    }
-                }
-                BabySwitcher(
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, top = 14.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                DashboardTodaySummary(
+                    greeting = DataManager.getGreeting(),
+                    babyInfo = babyInfo,
                     babies = babies,
-                    activeBaby = babyInfo,
-                    onSelect = { DataManager.switchBaby(it.id) },
-                    onAddBaby = { showAddBaby = true }
+                    ageDays = animatedDays,
+                    ageMonths = animatedAgeMonths,
+                    todayFeedingCount = todayFeeding.size,
+                    openReminderCount = activeReminderCount,
+                    timelineCount = animatedTimeline,
+                    onAvatarClick = { avatarPicker.launch("image/*") },
+                    onSelectBaby = { DataManager.switchBaby(it.id) },
+                    onAddBaby = { showAddBaby = true },
+                    modifier = Modifier.animateItem()
                 )
             }
-        }
 
-        item {
-            ReminderDashboardPanel(
-                reminders = activeUpcomingReminders,
-                openCount = activeReminderCount,
-                onAdd = {
-                    editingReminder = null
-                    showReminderEditor = true
-                },
-                onEdit = { reminder ->
-                    editingReminder = reminder
-                    showReminderEditor = true
-                },
-                onComplete = { DataManager.completeReminder(it.id) },
-                onDelete = { DataManager.deleteReminder(it.id) },
-                modifier = Modifier.animateItem()
-            )
-        }
-
-        item {
-            Column(Modifier.animateItem()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    AnimatedStatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.CalendarToday,
-                        accent = Color(0xFFEC407A),
-                        value = "$animatedAgeMonths",
-                        label = "月龄"
-                    )
-                    AnimatedStatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Star,
-                        accent = Color(0xFFF6BA6D),
-                        value = "$animatedMilestone",
-                        label = "里程碑"
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    AnimatedStatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.PhotoLibrary,
-                        accent = Color(0xFF64B5F6),
-                        value = "$animatedPhotos",
-                        label = "照片"
-                    )
-                    AnimatedStatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.AutoMirrored.Filled.TrendingUp,
-                        accent = Color(0xFFAB47BC),
-                        value = "$animatedTimeline",
-                        label = "记录"
-                    )
-                }
+            item {
+                ReminderDashboardPanel(
+                    reminders = activeUpcomingReminders,
+                    openCount = activeReminderCount,
+                    onAdd = {
+                        editingReminder = null
+                        showReminderEditor = true
+                    },
+                    onEdit = { reminder ->
+                        editingReminder = reminder
+                        showReminderEditor = true
+                    },
+                    onComplete = { DataManager.completeReminder(it.id) },
+                    onDelete = { DataManager.deleteReminder(it.id) },
+                    modifier = Modifier.animateItem()
+                )
             }
-        }
 
-        if (upcomingMilestones.isNotEmpty()) {
+            item {
+                DashboardQuickActions(
+                    todayFeedingCount = todayFeeding.size,
+                    nextVaccineText = nextVaccine?.let { (vax, monthsUntil) ->
+                        if (monthsUntil <= 0) "${vax.name} 到期" else "${monthsUntil}个月后"
+                    } ?: "计划",
+                    onTimeline = onOpenTimeline,
+                    onFeeding = { showFeedingScreen = true },
+                    onReminder = {
+                        editingReminder = null
+                        showReminderEditor = true
+                    },
+                    onVaccine = { showVaccineScreen = true },
+                    modifier = Modifier.animateItem()
+                )
+            }
+
+            item {
+                GrowthOverviewPanel(
+                    ageMonths = animatedAgeMonths,
+                    photoCount = animatedPhotos,
+                    timelineCount = animatedTimeline,
+                    milestoneCount = animatedMilestone,
+                    growthData = growthData,
+                    upcomingMilestones = upcomingMilestones,
+                    onGrowthClick = { showGrowthEntry = true },
+                    onMilestoneClick = { showMilestoneDetail = true },
+                    modifier = Modifier.animateItem()
+                )
+            }
+
+            item {
+                RecentContentPanel(
+                    records = recentRecords,
+                    media = recentMedia,
+                    onOpenTimeline = onOpenTimeline,
+                    onPhotoClick = { dashboardPreviewPhoto = it },
+                    onVideoClick = { dashboardPreviewVideoPath = it.url },
+                    modifier = Modifier.animateItem()
+                )
+            }
+
             item {
                 MiuixDashboardPanel(
-                    icon = Icons.Default.Flag,
-                    accent = Color(0xFFFF9800),
-                    title = "即将到来的里程碑",
-                    modifier = Modifier.animateItem().clickable { showMilestoneDetail = true }
+                    icon = Icons.Default.Favorite,
+                    accent = Color(0xFFEC407A),
+                    title = "育儿小贴士",
+                    modifier = Modifier.animateItem()
                 ) {
-                    upcomingMilestones.take(3).forEach { m ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(getMilestoneIcon(m.category), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(m.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    m.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            DashboardPill("${m.ageMonths}月龄", Color(0xFFFF9800))
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            MiuixDashboardPanel(
-                icon = Icons.AutoMirrored.Filled.TrendingUp,
-                accent = Color(0xFF4CAF50),
-                title = "身长趋势",
-                modifier = Modifier.clickable { showGrowthEntry = true }
-            ) {
-                if (growthData.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.TrendingUp,
-                                null,
-                                Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "点击录入第一组身长数据",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else {
-                    val maxHeightPx = 120f
-                    val maxHeight = growthData.maxOf { it.second }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().height(140.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        growthData.forEach { (label, value, color) ->
-                            val height = (value / maxOf(maxHeight, 100f)) * maxHeightPx
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("${value.toInt()}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .width(40.dp)
-                                        .height(height.dp)
-                                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                                        .animateContentSize()
-                                        .background(Color(color))
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            DashboardSectionTitle(
-                icon = Icons.Default.Star,
-                accent = Color(0xFFFFC107),
-                title = "最近记录",
-                subtitle = "把最近的成长片段集中放在首页"
-            )
-        }
-        if (recentRecords.isEmpty()) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(28.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.EditNote, null, Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        Spacer(Modifier.height(8.dp))
-                        Text("还没有成长记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("点击时间线标签开始记录吧", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    }
-                }
-            }
-        } else {
-            recentRecords.forEach { record ->
-                item(key = record.id) {
-                    val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
-                    Card(
-                        shape = RoundedCornerShape(28.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        border = BorderStroke(0.5.dp, catColor.copy(alpha = 0.2f)),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
-                        modifier = Modifier.animateItem()
-                    ) {
-                        Row(Modifier.padding(16.dp)) {
-                            Box(
-                                Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(catColor.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.AutoAwesome, null, Modifier.size(18.dp), tint = catColor)
-                            }
-                            Spacer(Modifier.width(14.dp))
-                            Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        record.title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    DashboardPill(record.date, catColor)
-                                }
-                                if (record.description.isNotEmpty()) {
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(record.description, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                }
-                                if (record.tags.isNotEmpty()) {
-                                    Spacer(Modifier.height(8.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        record.tags.take(3).forEach { tag ->
-                                            Box(modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                                .background(catColor.copy(alpha = 0.12f))
-                                                .padding(horizontal = 8.dp, vertical = 3.dp)) {
-                                                Text(tag, style = MaterialTheme.typography.labelSmall, color = catColor, fontSize = 11.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recent photos and videos
-        if (recentMedia.isNotEmpty()) {
-            item {
-                DashboardSectionTitle(
-                    icon = Icons.Default.PhotoLibrary,
-                    accent = Color(0xFF64B5F6),
-                    title = "最新照片",
-                    subtitle = "左右滑动查看更多"
-                )
-            }
-            item {
-                Box(Modifier.animateItem()) {
-                    RecentMediaCarousel(
-                        media = recentMedia,
-                        onPhotoClick = { dashboardPreviewPhoto = it },
-                        onVideoClick = { dashboardPreviewVideoPath = it.url }
+                    Text(
+                        "${babyInfo.nickname}现在 ${ageMonths} 个月。${tip.text}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-        }
 
-        item {
-            MiuixActionCard(
-                icon = Icons.Default.Fastfood,
-                accent = Color(0xFFF6BA6D),
-                title = "喂养日志",
-                subtitle = if (todayFeeding.isNotEmpty()) {
-                    "今日 ${todayFeeding.size} 次 · ${todayFormulaMl}ml"
-                } else {
-                    "点击记录今天的喂养"
-                },
-                onClick = { showFeedingScreen = true },
-                modifier = Modifier.fillMaxWidth().animateItem()
-            )
+            item { Spacer(Modifier.height(8.dp)) }
         }
-
-        item {
-            MiuixActionCard(
-                icon = Icons.Default.MedicalServices,
-                accent = Color(0xFF4CAF50),
-                title = "疫苗接种",
-                subtitle = if (nextVaccine != null) {
-                    val (vax, monthsUntil) = nextVaccine
-                    if (monthsUntil <= 0) "下一针: ${vax.name} (已到期)" else "下一针: ${vax.name} · ${monthsUntil}个月后"
-                } else {
-                    "查看接种计划"
-                },
-                onClick = { showVaccineScreen = true },
-                modifier = Modifier.fillMaxWidth().animateItem()
-            )
-        }
-
-        item {
-            MiuixDashboardPanel(
-                icon = Icons.Default.Favorite,
-                accent = Color(0xFFEC407A),
-                title = "育儿小贴士",
-                modifier = Modifier.animateItem()
-            ) {
-                Text(
-                    "${babyInfo.nickname}现在 ${ageMonths} 个月。${tip.text}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        item { Spacer(Modifier.height(8.dp)) }
-    }
     }
 
     if (showReminderEditor) {
@@ -762,6 +467,494 @@ fun DashboardScreen() {
         ) {
             VaccineScreen(onDismiss = { showVaccineScreen = false })
         }
+    }
+}
+
+@Composable
+private fun DashboardTodaySummary(
+    greeting: String,
+    babyInfo: BabyInfo,
+    babies: List<BabyInfo>,
+    ageDays: Int,
+    ageMonths: Int,
+    todayFeedingCount: Int,
+    openReminderCount: Int,
+    timelineCount: Int,
+    onAvatarClick: () -> Unit,
+    onSelectBaby: (BabyInfo) -> Unit,
+    onAddBaby: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "今日照护",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "$greeting，${babyInfo.nickname.ifBlank { "宝宝" }}的家长",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            BabySwitcher(
+                babies = babies,
+                activeBaby = babyInfo,
+                onSelect = onSelectBaby,
+                onAddBaby = onAddBaby
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .clickable(onClick = onAvatarClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (babyInfo.avatar != null) {
+                            AuthenticatedAsyncImage(
+                                model = babyInfo.avatar,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                babyInfo.nickname.take(1).ifBlank { "宝" },
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 24.sp
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            babyInfo.nickname.ifBlank { "宝宝" },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "今天 $ageDays 天大 · $ageMonths 个月 · $timelineCount 条记录",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    DashboardCareStat("待办", "${openReminderCount}项", Color(0xFF26A69A), Modifier.weight(1f))
+                    DashboardCareStat("喂养", "${todayFeedingCount}次", Color(0xFFF6BA6D), Modifier.weight(1f))
+                    DashboardCareStat("月龄", "${ageMonths}月", Color(0xFFEC407A), Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardCareStat(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.58f))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(value, style = MaterialTheme.typography.titleSmall, color = accent, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DashboardQuickActions(
+    todayFeedingCount: Int,
+    nextVaccineText: String,
+    onTimeline: () -> Unit,
+    onFeeding: () -> Unit,
+    onReminder: () -> Unit,
+    onVaccine: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "快速记录",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DashboardQuickActionTile(
+                    label = "记一笔",
+                    detail = "时间线",
+                    icon = Icons.Default.EditNote,
+                    accent = Color(0xFFEC407A),
+                    onClick = onTimeline,
+                    modifier = Modifier.weight(1f)
+                )
+                DashboardQuickActionTile(
+                    label = "喂养",
+                    detail = "${todayFeedingCount}次",
+                    icon = Icons.Default.Fastfood,
+                    accent = Color(0xFFF6BA6D),
+                    onClick = onFeeding,
+                    modifier = Modifier.weight(1f)
+                )
+                DashboardQuickActionTile(
+                    label = "提醒",
+                    detail = "复查",
+                    icon = Icons.Default.Notifications,
+                    accent = Color(0xFF26A69A),
+                    onClick = onReminder,
+                    modifier = Modifier.weight(1f)
+                )
+                DashboardQuickActionTile(
+                    label = "疫苗",
+                    detail = nextVaccineText,
+                    icon = Icons.Default.MedicalServices,
+                    accent = Color(0xFF4CAF50),
+                    onClick = onVaccine,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardQuickActionTile(
+    label: String,
+    detail: String,
+    icon: ImageVector,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = modifier
+            .height(90.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.56f))
+            .miuixPressable(interactionSource, pressedScale = 0.95f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(accent.copy(alpha = 0.13f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, Modifier.size(18.dp), tint = accent)
+        }
+        Spacer(Modifier.height(7.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(
+            detail,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun GrowthOverviewPanel(
+    ageMonths: Int,
+    photoCount: Int,
+    timelineCount: Int,
+    milestoneCount: Int,
+    growthData: List<Triple<String, Float, Long>>,
+    upcomingMilestones: List<Milestone>,
+    onGrowthClick: () -> Unit,
+    onMilestoneClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    MiuixDashboardPanel(
+        icon = Icons.AutoMirrored.Filled.TrendingUp,
+        accent = Color(0xFF4CAF50),
+        title = "成长概览",
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DashboardOverviewMetric("月龄", "$ageMonths", Color(0xFFEC407A), Modifier.weight(1f))
+            DashboardOverviewMetric("照片", "$photoCount", Color(0xFF64B5F6), Modifier.weight(1f))
+            DashboardOverviewMetric("记录", "$timelineCount", Color(0xFF7E57C2), Modifier.weight(1f))
+            DashboardOverviewMetric("里程碑", "$milestoneCount", Color(0xFFF6BA6D), Modifier.weight(1f))
+        }
+
+        if (upcomingMilestones.isNotEmpty()) {
+            val milestone = upcomingMilestones.first()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.58f))
+                    .clickable(onClick = onMilestoneClick)
+                    .padding(13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(getMilestoneIcon(milestone.category), null, Modifier.size(18.dp), tint = Color(0xFFFF9800))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        milestone.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        "即将到来的 ${milestone.ageMonths} 月龄里程碑",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        GrowthTrendContent(
+            growthData = growthData,
+            onClick = onGrowthClick
+        )
+    }
+}
+
+@Composable
+private fun DashboardOverviewMetric(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.52f))
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(value, style = MaterialTheme.typography.titleMedium, color = accent, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
+}
+
+@Composable
+private fun GrowthTrendContent(
+    growthData: List<Triple<String, Float, Long>>,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.52f))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("身长趋势", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("录入", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        }
+        if (growthData.isEmpty()) {
+            Text(
+                "还没有身长数据，点击添加第一组记录",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val visibleGrowth = growthData.takeLast(5)
+            val maxHeightPx = 78f
+            val maxHeight = visibleGrowth.maxOf { it.second }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                visibleGrowth.forEach { (label, value, color) ->
+                    val height = (value / maxOf(maxHeight, 100f)) * maxHeightPx
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${value.toInt()}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(5.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(34.dp)
+                                .height(height.dp)
+                                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                                .animateContentSize()
+                                .background(Color(color))
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentContentPanel(
+    records: List<TimelineRecord>,
+    media: List<PhotoEntry>,
+    onOpenTimeline: () -> Unit,
+    onPhotoClick: (PhotoEntry) -> Unit,
+    onVideoClick: (PhotoEntry) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    MiuixDashboardPanel(
+        icon = Icons.Default.AutoAwesome,
+        accent = Color(0xFF64B5F6),
+        title = "最近内容",
+        modifier = modifier
+    ) {
+        if (records.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.52f))
+                    .clickable(onClick = onOpenTimeline)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.EditNote, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("还没有成长记录", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("点击去时间线添加第一条记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            records.take(2).forEach { record ->
+                DashboardRecentRecordRow(record = record)
+            }
+        }
+
+        if (media.isNotEmpty()) {
+            Text(
+                "最新照片",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            RecentMediaCarousel(
+                media = media,
+                onPhotoClick = onPhotoClick,
+                onVideoClick = onVideoClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardRecentRecordRow(record: TimelineRecord) {
+    val catColor = Color(getCategoryConfig(record.category)?.color ?: 0xFFe5e7eb)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.52f))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(catColor.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.AutoAwesome, null, Modifier.size(17.dp), tint = catColor)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                record.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (record.description.isNotBlank()) {
+                Text(
+                    record.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        DashboardPill(record.date, catColor)
     }
 }
 
@@ -974,7 +1167,14 @@ private fun ReminderDashboardPanel(
                     Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                reminders.forEach { reminder ->
+                val nextReminder = reminders.first()
+                ReminderPrimaryDashboardRow(
+                    reminder = nextReminder,
+                    onEdit = { onEdit(nextReminder) },
+                    onComplete = { onComplete(nextReminder) },
+                    onDelete = { onDelete(nextReminder) }
+                )
+                reminders.drop(1).forEach { reminder ->
                     ReminderDashboardRow(
                         reminder = reminder,
                         onEdit = { onEdit(reminder) },
@@ -983,6 +1183,73 @@ private fun ReminderDashboardPanel(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReminderPrimaryDashboardRow(
+    reminder: Reminder,
+    onEdit: () -> Unit,
+    onComplete: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val accent = Color(reminderCategoryColor(reminder.category))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(accent.copy(alpha = 0.11f))
+            .border(BorderStroke(0.5.dp, accent.copy(alpha = 0.22f)), RoundedCornerShape(24.dp))
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = onComplete,
+            modifier = Modifier.size(38.dp)
+        ) {
+            Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "完成提醒", tint = accent)
+        }
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(reminderCategoryIcon(reminder.category), null, Modifier.size(19.dp), tint = accent)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "下一项",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.width(6.dp))
+                DashboardPill(reminderDueText(reminder.dueAt), accent)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                reminder.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                listOf(reminderCategoryLabel(reminder.category), reminder.notes).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+            Icon(Icons.Default.DeleteOutline, contentDescription = "删除提醒", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
