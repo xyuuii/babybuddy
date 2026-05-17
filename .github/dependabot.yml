@@ -7,6 +7,22 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    groups:
+      android-build-tooling:
+        patterns:
+          - "com.android.application"
+          - "org.jetbrains.kotlin.*"
+          - "com.google.devtools.ksp"
+      android-compose-ui:
+        patterns:
+          - "androidx.compose*"
+          - "androidx.activity*"
+          - "androidx.navigation*"
+          - "top.yukonga.miuix.kmp:*"
+    ignore:
+      - dependency-name: "top.yukonga.miuix.kmp:miuix-android"
+        versions:
+          - ">= 0.8.0"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -15,3 +31,12 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    groups:
+      ci-actions:
+        patterns:
+          - "actions/*"
+          - "gradle/actions"
+    ignore:
+      - dependency-name: "gradle/actions"
+        update-types:
+          - "version-update:semver-major"
