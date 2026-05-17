@@ -4,10 +4,14 @@ import android.graphics.drawable.ColorDrawable
 import android.view.Window
 import android.view.WindowManager
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +35,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.MotionAnimatedContent
+import com.yueming.baby.ui.motion.motionCardPress
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -211,10 +218,30 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                     val isDone = status != null
                     val isOverdue = !isDone && vaccine.scheduledAgeMonths <= ageMonths
                     val isUpcoming = !isDone && vaccine.scheduledAgeMonths > ageMonths
+                    val interactionSource = remember(vaccine.id) { MutableInteractionSource() }
+                    val pressed by interactionSource.collectIsPressedAsState()
+                    val cardCorner by animateDpAsState(
+                        targetValue = if (pressed) 24.dp else 20.dp,
+                        animationSpec = BabyMotion.cardShapeSpring(),
+                        label = "vaccineCardCorner"
+                    )
+                    val containerColor by animateColorAsState(
+                        targetValue = when {
+                            isDone -> Color(0xFFE8F5E9)
+                            isOverdue -> Color(0xFFFFF3E0)
+                            else -> MaterialTheme.colorScheme.surface.copy(alpha = if (pressed) 1f else 0.96f)
+                        },
+                        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+                        label = "vaccineCardContainer"
+                    )
 
                     Card(
                         modifier = Modifier.fillMaxWidth().animateItem()
-                            .clickable {
+                            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.985f)
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
                                 if (isDone) {
                                     showUndoConfirm = vaccine
                                 } else {
@@ -223,15 +250,9 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                                     markBatch = ""
                                 }
                             },
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(cardCorner),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = when {
-                                isDone -> Color(0xFFE8F5E9)
-                                isOverdue -> Color(0xFFFFF3E0)
-                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-                            }
-                        ),
+                        colors = CardDefaults.cardColors(containerColor = containerColor),
                         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f))
                     ) {
                         Row(
@@ -250,11 +271,20 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                when {
-                                    isDone -> Icon(Icons.Default.Check, null, Modifier.size(20.dp), tint = Color.White)
-                                    isOverdue -> Text("!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                    else -> Text("${vaccine.scheduledAgeMonths}", fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                MotionAnimatedContent(
+                                    targetState = when {
+                                        isDone -> "done"
+                                        isOverdue -> "overdue"
+                                        else -> "pending"
+                                    },
+                                    label = "vaccineStatus"
+                                ) { state ->
+                                    when (state) {
+                                        "done" -> Icon(Icons.Default.Check, null, Modifier.size(20.dp), tint = Color.White)
+                                        "overdue" -> Text("!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        else -> Text("${vaccine.scheduledAgeMonths}", fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
 

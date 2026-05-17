@@ -2,7 +2,9 @@ package com.yueming.baby.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -67,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -77,6 +80,7 @@ import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
 import com.yueming.baby.ui.components.MarkdownText
 import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.MotionAnimatedContent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -435,17 +439,45 @@ private fun ChatBubble(
 }
 @Composable
 private fun AssistantAvatar(isActive: Boolean) {
+    val avatarScale by animateFloatAsState(
+        targetValue = if (isActive) 1.08f else 1f,
+        animationSpec = BabyMotion.defaultSpatial<Float>(),
+        label = "assistantAvatarScale"
+    )
+    val avatarColor by animateColorAsState(
+        targetValue = if (isActive) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "assistantAvatarColor"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (isActive) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "assistantAvatarIcon"
+    )
+
     Box(
         modifier = Modifier
             .size(34.dp)
+            .graphicsLayer {
+                scaleX = avatarScale
+                scaleY = avatarScale
+            }
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(avatarColor),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             Icons.Default.SmartToy,
             contentDescription = null,
-            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = iconColor,
             modifier = Modifier.size(18.dp)
         )
     }
@@ -554,15 +586,29 @@ private fun InputRow(
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "发送",
-                        tint = if (enabled && value.isNotBlank()) {
-                            MaterialTheme.colorScheme.onPrimary
+                    val buttonState = when {
+                        !enabled -> "loading"
+                        value.isNotBlank() -> "ready"
+                        else -> "idle"
+                    }
+                    MotionAnimatedContent(
+                        targetState = buttonState,
+                        label = "aiSendButtonState"
+                    ) { state ->
+                        if (state == "loading") {
+                            TinyDots()
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送",
+                                tint = if (state == "ready") {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
         }

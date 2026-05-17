@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -113,8 +114,9 @@ import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.ThumbnailManager
 import com.yueming.baby.ui.components.VideoPlayerDialog
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.miuixFadeSlideIn
-import com.yueming.baby.ui.motion.miuixPressable
+import com.yueming.baby.ui.motion.motionCardPress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -251,18 +253,23 @@ private fun MediaGridCard(
 ) {
     val isVideo = photo.isVideoMedia()
     val interactionSource = remember { MutableInteractionSource() }
+    val cardCorner by animateDpAsState(
+        targetValue = if (isSelected) 28.dp else 24.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "mediaGridCorner"
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .miuixPressable(interactionSource, pressedScale = 0.965f)
+            .motionCardPress(interactionSource, pressedScale = 0.965f)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(cardCorner),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f)

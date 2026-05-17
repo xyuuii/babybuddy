@@ -5,6 +5,8 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.yueming.baby.ui.motion.BabyMotion
 import kotlinx.coroutines.delay
 
 private val MotionEnterEasing = CubicBezierEasing(0.0f, 0.0f, 0.2f, 1.0f)
@@ -115,11 +118,13 @@ fun AppEditorDialog(
             AnimatedVisibility(
                 visible = visible,
                 enter = fadeIn(tween(durationMillis = 120, easing = MotionEnterEasing)) +
+                    scaleIn(initialScale = 0.965f, animationSpec = BabyMotion.pageScaleSpec()) +
                     slideInVertically(
                         animationSpec = tween(durationMillis = 320, easing = MotionEnterEasing),
                         initialOffsetY = { it / 14 }
                     ),
                 exit = fadeOut(tween(durationMillis = 120, easing = MotionExitEasing)) +
+                    scaleOut(targetScale = 0.985f, animationSpec = tween(180, easing = MotionExitEasing)) +
                     slideOutVertically(
                         animationSpec = tween(durationMillis = 200, easing = MotionExitEasing),
                         targetOffsetY = { it / 12 }

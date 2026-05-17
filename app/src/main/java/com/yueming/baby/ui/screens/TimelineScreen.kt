@@ -18,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -53,6 +55,8 @@ import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.motionCardPress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -147,14 +151,43 @@ private fun TimelineFilterChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val chipCorner by animateDpAsState(
+        targetValue = if (pressed || selected) 24.dp else 22.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "timelineFilterCorner"
+    )
+    val chipColor by animateColorAsState(
+        targetValue = if (selected) {
+            accent.copy(alpha = if (pressed) 0.2f else 0.14f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = if (pressed) 1f else 0.92f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "timelineFilterColor"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) {
+            accent.copy(alpha = if (pressed) 0.46f else 0.34f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (pressed) 0.42f else 0.28f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "timelineFilterBorder"
+    )
+
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = if (selected) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        border = BorderStroke(
-            0.5.dp,
-            if (selected) accent.copy(alpha = 0.34f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
-        ),
-        modifier = Modifier.clickable(onClick = onClick)
+        shape = RoundedCornerShape(chipCorner),
+        color = chipColor,
+        border = BorderStroke(0.5.dp, borderColor),
+        modifier = Modifier
+            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.96f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
@@ -493,6 +526,20 @@ fun TimelineScreen() {
                             val isFirst = index == 0
                             val isLast = index == records.lastIndex
                             val totalInGroup = records.size
+                            val recordInteraction = remember(record.id) { MutableInteractionSource() }
+                            val recordPressed by recordInteraction.collectIsPressedAsState()
+                            val recordCorner by animateDpAsState(
+                                targetValue = if (recordPressed) 30.dp else 26.dp,
+                                animationSpec = BabyMotion.cardShapeSpring(),
+                                label = "timelineRecordCorner"
+                            )
+                            val recordContainerColor by animateColorAsState(
+                                targetValue = MaterialTheme.colorScheme.surface.copy(
+                                    alpha = if (recordPressed) 0.98f else 0.92f
+                                ),
+                                animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+                                label = "timelineRecordContainer"
+                            )
 
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 // ── Left timeline column: dot + line ──
@@ -564,12 +611,23 @@ fun TimelineScreen() {
                                         modifier = Modifier
                                             .animateItem()
                                             .fillMaxWidth()
-                                            .padding(start = 5.dp),
-                                        shape = RoundedCornerShape(26.dp),
+                                            .padding(start = 5.dp)
+                                            .motionCardPress(
+                                                interactionSource = recordInteraction,
+                                                pressedScale = 0.985f
+                                            )
+                                            .clickable(
+                                                interactionSource = recordInteraction,
+                                                indication = null
+                                            ) {
+                                                editingRecord = record
+                                                showAddDialog = true
+                                            },
+                                        shape = RoundedCornerShape(recordCorner),
                                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                                         border = BorderStroke(0.5.dp, catColor.copy(alpha = 0.18f)),
                                         colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                                            containerColor = recordContainerColor
                                         )
                                     ) {
                                         Column(Modifier.padding(16.dp)) {

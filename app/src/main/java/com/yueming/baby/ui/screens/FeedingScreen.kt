@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.motion.motionListItem
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -127,6 +128,10 @@ fun FeedingScreen(onDismiss: () -> Unit) {
             // Today summary card
             item {
                 Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                        .motionListItem(index = 0),
                     shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
@@ -148,6 +153,10 @@ fun FeedingScreen(onDismiss: () -> Unit) {
             // Quick add
             item {
                 Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                        .motionListItem(index = 1),
                     shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
@@ -191,7 +200,9 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                         val selectedInfo = feedingTypeInfo[selectedType]!!
                         val needsNumber = feedingQuickEntryNeedsNumber(selectedType)
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateContentSize(),
                             shape = RoundedCornerShape(22.dp),
                             color = selectedInfo.color.copy(alpha = 0.12f),
                             border = BorderStroke(0.5.dp, selectedInfo.color.copy(alpha = 0.28f))
@@ -321,7 +332,8 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                     FeedingRecordItem(
                         record = record,
                         info = feedingTypeInfo[record.type],
-                        onDelete = { deleteConfirmId = record.id }
+                        onDelete = { deleteConfirmId = record.id },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -340,7 +352,8 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                     FeedingRecordItem(
                         record = record,
                         info = feedingTypeInfo[record.type],
-                        onDelete = { deleteConfirmId = record.id }
+                        onDelete = { deleteConfirmId = record.id },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -420,7 +433,8 @@ private fun SummaryItem(value: String, label: String) {
 private fun FeedingRecordItem(
     record: FeedingRecord,
     info: FeedingTypeInfo?,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val timeStr = remember(record.timestamp) {
         Instant.ofEpochMilli(record.timestamp)
@@ -430,7 +444,7 @@ private fun FeedingRecordItem(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)),

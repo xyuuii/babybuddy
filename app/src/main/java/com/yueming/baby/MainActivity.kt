@@ -45,7 +45,7 @@ import androidx.navigation.compose.rememberNavController
 import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.ui.motion.BabyMotion
-import com.yueming.baby.ui.motion.miuixPressable
+import com.yueming.baby.ui.motion.motionPressable
 import com.yueming.baby.ui.screens.*
 import com.yueming.baby.ui.theme.YueMingTheme
 import com.yueming.baby.ui.theme.ThemeMode
@@ -126,6 +126,19 @@ sealed class Screen(val route: String, val title: String, val selectedIcon: Imag
     data object Settings  : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
+private fun screenRouteIndex(route: String?): Int = when (route) {
+    Screen.Dashboard.route -> 0
+    Screen.Timeline.route -> 1
+    Screen.Photos.route -> 2
+    Screen.AI.route -> 3
+    Screen.Settings.route -> 4
+    else -> 0
+}
+
+private fun screenTransitionDirection(fromRoute: String?, toRoute: String?): Int {
+    return (screenRouteIndex(toRoute) - screenRouteIndex(fromRoute)).coerceIn(-1, 1)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun YueMingApp() {
@@ -162,18 +175,44 @@ fun YueMingApp() {
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background),
             enterTransition = {
+                val direction = screenTransitionDirection(
+                    initialState.destination.route,
+                    targetState.destination.route
+                )
                 fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
+                    slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
                     scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
             },
             exitTransition = {
-                fadeOut(animationSpec = tween(80))
+                val direction = screenTransitionDirection(
+                    initialState.destination.route,
+                    targetState.destination.route
+                )
+                fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
+                    slideOutHorizontally(
+                        animationSpec = tween(220, easing = BabyMotion.miuixEase)
+                    ) { -direction * it / 16 } +
+                    scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
             },
             popEnterTransition = {
+                val direction = screenTransitionDirection(
+                    initialState.destination.route,
+                    targetState.destination.route
+                )
                 fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
+                    slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
                     scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
             },
             popExitTransition = {
-                fadeOut(animationSpec = tween(80))
+                val direction = screenTransitionDirection(
+                    initialState.destination.route,
+                    targetState.destination.route
+                )
+                fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
+                    slideOutHorizontally(
+                        animationSpec = tween(220, easing = BabyMotion.miuixEase)
+                    ) { -direction * it / 16 } +
+                    scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
             }
         ) {
             composable(Screen.Dashboard.route) {
@@ -230,7 +269,7 @@ private fun RowScope.YueMingNavigationBarItem(
     val tapPulse = remember { Animatable(1f) }
     val selectedProgress by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = BabyMotion.fastSpatial<Float>(),
         label = "bottomBarSelectedProgress"
     )
 
@@ -240,7 +279,7 @@ private fun RowScope.YueMingNavigationBarItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         },
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = BabyMotion.colorFadeSpec(),
         label = "bottomBarItemColor"
     )
     val indicatorColor by animateColorAsState(
@@ -249,7 +288,7 @@ private fun RowScope.YueMingNavigationBarItem(
         } else {
             Color.Transparent
         },
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = BabyMotion.colorFadeSpec(),
         label = "bottomBarIndicatorColor"
     )
 
@@ -258,7 +297,7 @@ private fun RowScope.YueMingNavigationBarItem(
             .weight(1f)
             .fillMaxHeight()
             .clip(RoundedCornerShape(26.dp))
-            .miuixPressable(interactionSource, pressedScale = 0.94f)
+            .motionPressable(interactionSource, pressedScale = 0.94f)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
