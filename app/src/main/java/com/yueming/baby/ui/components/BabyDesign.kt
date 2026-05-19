@@ -55,15 +55,16 @@ object BabyPalette {
     val Cream = Color(0xFFFFF8F2)
     val Ink = Color(0xFF2F262A)
 }
-fun Modifier.babyPageBackground(): Modifier = background(
-    Brush.verticalGradient(
-        listOf(
-            Color(0xFFFFFAF4),
-            Color(0xFFFFF6F0),
-            Color(0xFFFFFBF8)
-        )
+
+private val BabyPageBackgroundBrush = Brush.verticalGradient(
+    listOf(
+        Color(0xFFFFFAF4),
+        Color(0xFFFFF6F0),
+        Color(0xFFFFFBF8)
     )
 )
+
+fun Modifier.babyPageBackground(): Modifier = background(BabyPageBackgroundBrush)
 
 @Composable
 fun BabySoftCard(

@@ -86,6 +86,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
+private val DASHBOARD_HEIGHT_PATTERN = Regex("身长\\s*(\\d+\\.?\\d*)\\s*cm")
 private val REMINDER_EDITOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
@@ -155,8 +156,7 @@ fun DashboardScreen(
             .sortedBy { it.date }
             .mapNotNull { record ->
                 // Parse height from description like "身长78cm，体重10.2kg"
-                val heightRegex = Regex("身长\\s*(\\d+\\.?\\d*)\\s*cm")
-                val match = heightRegex.find(record.description)
+                val match = DASHBOARD_HEIGHT_PATTERN.find(record.description)
                 if (match != null && match.groupValues.size >= 2) {
                     val height = match.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
                     // Extract a short label from the date
@@ -165,7 +165,7 @@ fun DashboardScreen(
                     Triple(label, height, 0xFF86efac.toLong())
                 } else {
                     // Also try title
-                    val titleMatch = heightRegex.find(record.title)
+                    val titleMatch = DASHBOARD_HEIGHT_PATTERN.find(record.title)
                     if (titleMatch != null && titleMatch.groupValues.size >= 2) {
                         val height = titleMatch.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
                         val dateParts = record.date.split("-")

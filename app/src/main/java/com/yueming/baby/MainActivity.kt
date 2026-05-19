@@ -147,7 +147,9 @@ private fun screenTransitionDirection(fromRoute: String?, toRoute: String?): Int
 @Composable
 fun YueMingApp() {
     val navController = rememberNavController()
-    val screens = listOf(Screen.Dashboard, Screen.Timeline, Screen.Photos, Screen.AI, Screen.Settings)
+    val screens = remember {
+        listOf(Screen.Dashboard, Screen.Timeline, Screen.Photos, Screen.AI, Screen.Settings)
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route

@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -198,6 +199,9 @@ fun Modifier.miuixFadeSlideIn(
 ): Modifier {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        // Let the first composition draw before starting reveal animations. This keeps
+        // the same motion while avoiding startup work competing with the first frame.
+        withFrameNanos { }
         if (delayMillis > 0) {
             delay(delayMillis.toLong())
         }
