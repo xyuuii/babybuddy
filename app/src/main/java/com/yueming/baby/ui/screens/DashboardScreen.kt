@@ -76,7 +76,12 @@ import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.miuixCardPressable
 import com.yueming.baby.ui.motion.miuixFadeSlideIn
 import com.yueming.baby.ui.motion.miuixPressable
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,60 +91,133 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val DASHBOARD_RECENT_MEDIA_LIMIT = 24
+private const val DASHBOARD_STATE_COALESCE_MS = 48L
 private val DASHBOARD_HEIGHT_PATTERN = Regex("身长\\s*(\\d+\\.?\\d*)\\s*cm")
 private val REMINDER_EDITOR_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
+
+private data class DashboardPrimaryState(
+    val babies: List<BabyInfo> = emptyList(),
+    val babyInfo: BabyInfo = BabyInfo(),
+    val timeline: List<TimelineRecord> = emptyList(),
+    val photos: List<PhotoEntry> = emptyList()
+)
+
+private data class DashboardCareState(
+    val feedingRecords: List<FeedingRecord> = emptyList(),
+    val vaccineStatuses: List<VaccineStatus> = emptyList(),
+    val reminders: List<Reminder> = emptyList(),
+    val isLoading: Boolean = true
+)
+
+private data class DashboardState(
+    val babies: List<BabyInfo> = emptyList(),
+    val babyInfo: BabyInfo = BabyInfo(),
+    val timeline: List<TimelineRecord> = emptyList(),
+    val photos: List<PhotoEntry> = emptyList(),
+    val feedingRecords: List<FeedingRecord> = emptyList(),
+    val vaccineStatuses: List<VaccineStatus> = emptyList(),
+    val reminders: List<Reminder> = emptyList(),
+    val isLoading: Boolean = true
+)
+
+@OptIn(FlowPreview::class)
+private fun dashboardStateFlow(): Flow<DashboardState> {
+    val primaryFlow = combine(
+        DataManager.babies,
+        DataManager.babyInfo,
+        DataManager.timeline,
+        DataManager.photos
+    ) { babies, babyInfo, timeline, photos ->
+        DashboardPrimaryState(
+            babies = babies,
+            babyInfo = babyInfo,
+            timeline = timeline,
+            photos = photos
+        )
+    }
+    val careFlow = combine(
+        DataManager.feedingRecords,
+        DataManager.vaccineStatuses,
+        DataManager.reminders,
+        DataManager.isLoading
+    ) { feedingRecords, vaccineStatuses, reminders, isLoading ->
+        DashboardCareState(
+            feedingRecords = feedingRecords,
+            vaccineStatuses = vaccineStatuses,
+            reminders = reminders,
+            isLoading = isLoading
+        )
+    }
+
+    return combine(primaryFlow, careFlow) { primary, care ->
+        DashboardState(
+            babies = primary.babies,
+            babyInfo = primary.babyInfo,
+            timeline = primary.timeline,
+            photos = primary.photos,
+            feedingRecords = care.feedingRecords,
+            vaccineStatuses = care.vaccineStatuses,
+            reminders = care.reminders,
+            isLoading = care.isLoading
+        )
+    }
+        .debounce(DASHBOARD_STATE_COALESCE_MS)
+        .distinctUntilChanged()
+}
 
 @Composable
 fun DashboardScreen(
     onOpenTimeline: () -> Unit = {}
 ) {
-    val babies by DataManager.babies.collectAsState()
-    val babyInfo by DataManager.babyInfo.collectAsState()
-    val timeline by DataManager.timeline.collectAsState()
-    val photos by DataManager.photos.collectAsState()
-    val feedingRecords by DataManager.feedingRecords.collectAsState()
-    val vaccineStatuses by DataManager.vaccineStatuses.collectAsState()
-    val reminders by DataManager.reminders.collectAsState()
-    val isLoading by DataManager.isLoading.collectAsState()
+    val dashboardState by remember { dashboardStateFlow() }.collectAsState(initial = DashboardState())
+    val babies = dashboardState.babies
+    val babyInfo = dashboardState.babyInfo
+    val timeline = dashboardState.timeline
+    val photos = dashboardState.photos
+    val feedingRecords = dashboardState.feedingRecords
+    val vaccineStatuses = dashboardState.vaccineStatuses
+    val reminders = dashboardState.reminders
+    val isLoading = dashboardState.isLoading
 
-    val activeTimeline = remember(timeline, babyInfo.id) {
-        timeline.filter { belongsToBaby(it.babyId, babyInfo.id) }
+    val activeTimeline by remember(timeline, babyInfo.id) {
+        derivedStateOf { timeline.filter { belongsToBaby(it.babyId, babyInfo.id) } }
     }
-    val activePhotos = remember(photos, babyInfo.id) {
-        photos.filter { belongsToBaby(it.babyId, babyInfo.id) }
+    val activePhotos by remember(photos, babyInfo.id) {
+        derivedStateOf { photos.filter { belongsToBaby(it.babyId, babyInfo.id) } }
     }
-    val activeFeedingRecords = remember(feedingRecords, babyInfo.id) {
-        feedingRecords.filter { belongsToBaby(it.babyId, babyInfo.id) }
+    val activeFeedingRecords by remember(feedingRecords, babyInfo.id) {
+        derivedStateOf { feedingRecords.filter { belongsToBaby(it.babyId, babyInfo.id) } }
     }
-    val activeReminderCount = remember(reminders, babyInfo.id) {
-        reminders.count { belongsToBaby(it.babyId, babyInfo.id) && !it.isCompleted }
+    val activeReminderCount by remember(reminders, babyInfo.id) {
+        derivedStateOf { reminders.count { belongsToBaby(it.babyId, babyInfo.id) && !it.isCompleted } }
     }
-    val activeUpcomingReminders = remember(reminders, babyInfo.id) {
-        upcomingReminders(reminders, babyInfo.id, limit = 3)
+    val activeUpcomingReminders by remember(reminders, babyInfo.id) {
+        derivedStateOf { upcomingReminders(reminders, babyInfo.id, limit = 3) }
     }
 
     val ageMonths = remember(babyInfo.birthDate) { DataManager.getAgeInMonths(babyInfo.birthDate) }
     val ageDays = remember(babyInfo.birthDate) { DataManager.getAgeInDays(babyInfo.birthDate) }
-    val recentRecords = remember(activeTimeline) { activeTimeline.sortedByDescending { it.date }.take(3) }
-    val milestoneCount = remember(activeTimeline) { activeTimeline.count { it.category == "milestone" } }
+    val recentRecords by remember(activeTimeline) {
+        derivedStateOf { activeTimeline.sortedByDescending { it.date }.take(3) }
+    }
+    val milestoneCount by remember(activeTimeline) {
+        derivedStateOf { activeTimeline.count { it.category == "milestone" } }
+    }
     val animatedAgeMonths by animateIntAsState(targetValue = ageMonths, animationSpec = tween(800))
     val animatedDays by animateIntAsState(targetValue = ageDays, animationSpec = tween(1000))
     val animatedMilestone by animateIntAsState(targetValue = milestoneCount, animationSpec = tween(800))
     val animatedTimeline by animateIntAsState(targetValue = activeTimeline.size, animationSpec = tween(800))
     val animatedPhotos by animateIntAsState(targetValue = activePhotos.size, animationSpec = tween(800))
-    val recentMedia = remember(activePhotos) {
-        activePhotos.sortedByDescending { it.date }.take(DASHBOARD_RECENT_MEDIA_LIMIT)
+    val recentMedia by remember(activePhotos) {
+        derivedStateOf { activePhotos.sortedByDescending { it.date }.take(DASHBOARD_RECENT_MEDIA_LIMIT) }
     }
 
     val tip = TIPS.find { t -> ageMonths >= t.months.first && ageMonths <= t.months.second } ?: TIPS.last()
     val todayStart = remember {
         java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toEpochSecond() * 1000
     }
-    val todayFeeding = remember(activeFeedingRecords) {
-        activeFeedingRecords.filter { it.timestamp >= todayStart }
-    }
-    val todayFormulaMl = remember(todayFeeding) {
-        todayFeeding.filter { it.type == "formula" || it.type == "water" }.sumOf { it.volumeMl }
+    val todayFeeding by remember(activeFeedingRecords, todayStart) {
+        derivedStateOf { activeFeedingRecords.filter { it.timestamp >= todayStart } }
     }
     val nextVaccine = remember(vaccineStatuses, ageMonths, babyInfo.id) {
         DataManager.getNextVaccine(babyInfo.birthDate)
@@ -150,30 +228,31 @@ fun DashboardScreen(
 
     val upcomingMilestones = remember(ageMonths) { getMilestonesForAge(ageMonths) }
 
-    val growthData = remember(activeTimeline) {
-        activeTimeline
-            .filter { it.category == "growth" }
-            .sortedBy { it.date }
-            .mapNotNull { record ->
-                // Parse height from description like "身长78cm，体重10.2kg"
-                val match = DASHBOARD_HEIGHT_PATTERN.find(record.description)
-                if (match != null && match.groupValues.size >= 2) {
-                    val height = match.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
-                    // Extract a short label from the date
-                    val dateParts = record.date.split("-")
-                    val label = if (dateParts.size >= 2) "${dateParts[1].toIntOrNull() ?: ""}月" else record.date
-                    Triple(label, height, 0xFF86efac.toLong())
-                } else {
-                    // Also try title
-                    val titleMatch = DASHBOARD_HEIGHT_PATTERN.find(record.title)
-                    if (titleMatch != null && titleMatch.groupValues.size >= 2) {
-                        val height = titleMatch.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
+    val growthData by remember(activeTimeline) {
+        derivedStateOf {
+            activeTimeline
+                .filter { it.category == "growth" }
+                .sortedBy { it.date }
+                .mapNotNull { record ->
+                    // Parse height from description like "身长78cm，体重10.2kg"
+                    val match = DASHBOARD_HEIGHT_PATTERN.find(record.description)
+                    if (match != null && match.groupValues.size >= 2) {
+                        val height = match.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
                         val dateParts = record.date.split("-")
                         val label = if (dateParts.size >= 2) "${dateParts[1].toIntOrNull() ?: ""}月" else record.date
                         Triple(label, height, 0xFF86efac.toLong())
-                    } else null
+                    } else {
+                        // Also try title
+                        val titleMatch = DASHBOARD_HEIGHT_PATTERN.find(record.title)
+                        if (titleMatch != null && titleMatch.groupValues.size >= 2) {
+                            val height = titleMatch.groupValues[1].toFloatOrNull() ?: return@mapNotNull null
+                            val dateParts = record.date.split("-")
+                            val label = if (dateParts.size >= 2) "${dateParts[1].toIntOrNull() ?: ""}月" else record.date
+                            Triple(label, height, 0xFF86efac.toLong())
+                        } else null
+                    }
                 }
-            }
+        }
     }
 
     var showAddBaby by remember { mutableStateOf(false) }
@@ -234,6 +313,25 @@ fun DashboardScreen(
         }
     }
 
+    var loadAvatarImage by remember(babyInfo.id) { mutableStateOf(false) }
+    var showDeferredDashboardContent by remember(babyInfo.id) { mutableStateOf(false) }
+    var showRecentMedia by remember(babyInfo.id) { mutableStateOf(false) }
+
+    LaunchedEffect(isLoading, babies.isEmpty(), babyInfo.id) {
+        loadAvatarImage = false
+        showDeferredDashboardContent = false
+        showRecentMedia = false
+        if (!isLoading && babies.isNotEmpty()) {
+            withFrameNanos { }
+            delay(48)
+            loadAvatarImage = true
+            delay(72)
+            showDeferredDashboardContent = true
+            delay(120)
+            showRecentMedia = true
+        }
+    }
+
     if (isLoading) {
         Box(Modifier.fillMaxSize().babyPageBackground(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -291,6 +389,7 @@ fun DashboardScreen(
                     todayFeedingCount = todayFeeding.size,
                     openReminderCount = activeReminderCount,
                     timelineCount = animatedTimeline,
+                    loadAvatarImage = loadAvatarImage,
                     onAvatarClick = { avatarPicker.launch("image/*") },
                     onSelectBaby = { DataManager.switchBaby(it.id) },
                     onAddBaby = { showAddBaby = true },
@@ -339,49 +438,51 @@ fun DashboardScreen(
                 )
             }
 
-            item {
-                GrowthOverviewPanel(
-                    ageMonths = animatedAgeMonths,
-                    photoCount = animatedPhotos,
-                    timelineCount = animatedTimeline,
-                    milestoneCount = animatedMilestone,
-                    growthData = growthData,
-                    upcomingMilestones = upcomingMilestones,
-                    onGrowthClick = { showGrowthEntry = true },
-                    onMilestoneClick = { showMilestoneDetail = true },
-                    modifier = Modifier
-                        .animateItem()
-                        .miuixFadeSlideIn(delayMillis = 170)
-                )
-            }
-
-            item {
-                RecentContentPanel(
-                    records = recentRecords,
-                    media = recentMedia,
-                    onOpenTimeline = onOpenTimeline,
-                    onPhotoClick = { dashboardPreviewPhoto = it },
-                    onVideoClick = { dashboardPreviewVideoPath = it.url },
-                    modifier = Modifier
-                        .animateItem()
-                        .miuixFadeSlideIn(delayMillis = 220)
-                )
-            }
-
-            item {
-                MiuixDashboardPanel(
-                    icon = Icons.Default.Favorite,
-                    accent = Color(0xFFEC407A),
-                    title = "育儿小贴士",
-                    modifier = Modifier
-                        .animateItem()
-                        .miuixFadeSlideIn(delayMillis = 270)
-                ) {
-                    Text(
-                        "${babyInfo.nickname}现在 ${ageMonths} 个月。${tip.text}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (showDeferredDashboardContent) {
+                item {
+                    GrowthOverviewPanel(
+                        ageMonths = animatedAgeMonths,
+                        photoCount = animatedPhotos,
+                        timelineCount = animatedTimeline,
+                        milestoneCount = animatedMilestone,
+                        growthData = growthData,
+                        upcomingMilestones = upcomingMilestones,
+                        onGrowthClick = { showGrowthEntry = true },
+                        onMilestoneClick = { showMilestoneDetail = true },
+                        modifier = Modifier
+                            .animateItem()
+                            .miuixFadeSlideIn(delayMillis = 170)
                     )
+                }
+
+                item {
+                    RecentContentPanel(
+                        records = recentRecords,
+                        media = if (showRecentMedia) recentMedia else emptyList(),
+                        onOpenTimeline = onOpenTimeline,
+                        onPhotoClick = { dashboardPreviewPhoto = it },
+                        onVideoClick = { dashboardPreviewVideoPath = it.url },
+                        modifier = Modifier
+                            .animateItem()
+                            .miuixFadeSlideIn(delayMillis = 220)
+                    )
+                }
+
+                item {
+                    MiuixDashboardPanel(
+                        icon = Icons.Default.Favorite,
+                        accent = Color(0xFFEC407A),
+                        title = "育儿小贴士",
+                        modifier = Modifier
+                            .animateItem()
+                            .miuixFadeSlideIn(delayMillis = 270)
+                    ) {
+                        Text(
+                            "${babyInfo.nickname}现在 ${ageMonths} 个月。${tip.text}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -509,6 +610,7 @@ private fun DashboardTodaySummary(
     todayFeedingCount: Int,
     openReminderCount: Int,
     timelineCount: Int,
+    loadAvatarImage: Boolean,
     onAvatarClick: () -> Unit,
     onSelectBaby: (BabyInfo) -> Unit,
     onAddBaby: () -> Unit,
@@ -557,7 +659,7 @@ private fun DashboardTodaySummary(
                             .clickable(onClick = onAvatarClick),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (babyInfo.avatar != null) {
+                        if (loadAvatarImage && babyInfo.avatar != null) {
                             AuthenticatedAsyncImage(
                                 model = babyInfo.avatar,
                                 contentDescription = null,
