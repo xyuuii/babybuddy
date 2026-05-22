@@ -48,6 +48,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.DataManager
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.motionPressable
@@ -154,90 +155,101 @@ fun YueMingApp() {
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
     val selectedIndex = screenRouteIndex(currentRoute).coerceIn(0, screens.lastIndex)
+    val bottomBarClearance =
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+            BabyLiquidBottomBarHeight +
+            BabyLiquidBottomBarVerticalPadding * 2 +
+            BabyLiquidBottomBarContentGap
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Dashboard.route,
+    CompositionLocalProvider(LocalBabyBottomBarClearance provides bottomBarClearance) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            enterTransition = {
-                val direction = screenTransitionDirection(
-                    initialState.destination.route,
-                    targetState.destination.route
-                )
-                fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
-                    slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
-                    scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
-            },
-            exitTransition = {
-                val direction = screenTransitionDirection(
-                    initialState.destination.route,
-                    targetState.destination.route
-                )
-                fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
-                    slideOutHorizontally(
-                        animationSpec = tween(220, easing = BabyMotion.miuixEase)
-                    ) { -direction * it / 16 } +
-                    scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
-            },
-            popEnterTransition = {
-                val direction = screenTransitionDirection(
-                    initialState.destination.route,
-                    targetState.destination.route
-                )
-                fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
-                    slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
-                    scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
-            },
-            popExitTransition = {
-                val direction = screenTransitionDirection(
-                    initialState.destination.route,
-                    targetState.destination.route
-                )
-                fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
-                    slideOutHorizontally(
-                        animationSpec = tween(220, easing = BabyMotion.miuixEase)
-                    ) { -direction * it / 16 } +
-                    scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
-            }
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            composable(Screen.Dashboard.route) {
-                DashboardScreen(
-                    onOpenTimeline = {
-                        navController.navigate(Screen.Timeline.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
-            }
-            composable(Screen.Timeline.route) { TimelineScreen() }
-            composable(Screen.Photos.route) { PhotosScreen() }
-            composable(Screen.AI.route) { AIScreen() }
-            composable(Screen.Settings.route) { SettingsScreen() }
-        }
-
-        BabyLiquidBottomBar(
-            screens = screens,
-            selectedIndex = selectedIndex,
-            onSelect = { screen ->
-                navController.navigate(screen.route) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Dashboard.route,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                enterTransition = {
+                    val direction = screenTransitionDirection(
+                        initialState.destination.route,
+                        targetState.destination.route
+                    )
+                    fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
+                        slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
+                        scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
+                },
+                exitTransition = {
+                    val direction = screenTransitionDirection(
+                        initialState.destination.route,
+                        targetState.destination.route
+                    )
+                    fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
+                        slideOutHorizontally(
+                            animationSpec = tween(220, easing = BabyMotion.miuixEase)
+                        ) { -direction * it / 16 } +
+                        scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
+                },
+                popEnterTransition = {
+                    val direction = screenTransitionDirection(
+                        initialState.destination.route,
+                        targetState.destination.route
+                    )
+                    fadeIn(animationSpec = BabyMotion.pageFadeSpec()) +
+                        slideInHorizontally(animationSpec = BabyMotion.pageSlideSpec()) { direction * it / 9 } +
+                        scaleIn(initialScale = 0.985f, animationSpec = BabyMotion.pageScaleSpec())
+                },
+                popExitTransition = {
+                    val direction = screenTransitionDirection(
+                        initialState.destination.route,
+                        targetState.destination.route
+                    )
+                    fadeOut(animationSpec = tween(120, easing = BabyMotion.fadeThroughEase)) +
+                        slideOutHorizontally(
+                            animationSpec = tween(220, easing = BabyMotion.miuixEase)
+                        ) { -direction * it / 16 } +
+                        scaleOut(targetScale = 0.992f, animationSpec = tween(180, easing = BabyMotion.miuixEase))
                 }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+            ) {
+                composable(Screen.Dashboard.route) {
+                    DashboardScreen(
+                        onOpenTimeline = {
+                            navController.navigate(Screen.Timeline.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+                composable(Screen.Timeline.route) { TimelineScreen() }
+                composable(Screen.Photos.route) { PhotosScreen() }
+                composable(Screen.AI.route) { AIScreen() }
+                composable(Screen.Settings.route) { SettingsScreen() }
+            }
+
+            BabyLiquidBottomBar(
+                screens = screens,
+                selectedIndex = selectedIndex,
+                onSelect = { screen ->
+                    navController.navigate(screen.route) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
+
+private val BabyLiquidBottomBarHeight = 68.dp
+private val BabyLiquidBottomBarVerticalPadding = 10.dp
+private val BabyLiquidBottomBarContentGap = 12.dp
 
 @Composable
 private fun BabyLiquidBottomBar(
@@ -247,31 +259,45 @@ private fun BabyLiquidBottomBar(
     modifier: Modifier = Modifier
 ) {
     val shape = CircleShape
-    val fallbackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val glassBase = Brush.linearGradient(
+        colors = if (isDark) {
+            listOf(
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)
+            )
+        } else {
+            listOf(
+                Color.White.copy(alpha = 0.92f),
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f)
+            )
+        }
+    )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = BabyLiquidBottomBarVerticalPadding),
         contentAlignment = Alignment.Center
     ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .widthIn(max = 430.dp)
-                .height(68.dp)
+                .height(BabyLiquidBottomBarHeight)
                 .shadow(
-                    elevation = 18.dp,
+                    elevation = 22.dp,
                     shape = shape,
                     clip = false,
-                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.14f),
-                    spotColor = Color.Black.copy(alpha = if (isDark) 0.22f else 0.12f)
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.34f else 0.16f),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.14f)
                 )
                 .clip(shape)
-                .background(fallbackColor, shape)
-                .liquidGlassBorder(shape = shape)
+                .background(glassBase, shape)
+                .liquidGlassChrome(shape = shape, isDark = isDark)
                 .padding(4.dp)
         ) {
             val tabWidth = maxWidth / screens.size
@@ -290,10 +316,21 @@ private fun BabyLiquidBottomBar(
                     .width(tabWidth)
                     .fillMaxHeight()
                     .clip(shape)
-                    .background(BabyPalette.Rose.copy(alpha = if (isDark) 0.28f else 0.18f))
-                    .liquidGlassBorder(
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                BabyPalette.Rose.copy(alpha = if (isDark) 0.34f else 0.24f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.18f else 0.12f),
+                                Color.White.copy(alpha = if (isDark) 0.06f else 0.26f)
+                            )
+                        ),
+                        shape
+                    )
+                    .liquidGlassChrome(
                         shape = shape,
-                        color = BabyPalette.Rose.copy(alpha = 0.28f)
+                        isDark = isDark,
+                        borderColor = BabyPalette.Rose.copy(alpha = if (isDark) 0.38f else 0.34f),
+                        topHighlightAlpha = if (isDark) 0.16f else 0.36f
                     )
             )
 
@@ -397,22 +434,37 @@ private fun RowScope.YueMingNavigationBarItem(
     }
 }
 
-private fun Modifier.liquidGlassBorder(
+private fun Modifier.liquidGlassChrome(
     shape: Shape,
-    color: Color = Color.White.copy(alpha = 0.28f)
+    isDark: Boolean,
+    borderColor: Color = Color.White.copy(alpha = if (isDark) 0.18f else 0.42f),
+    topHighlightAlpha: Float = if (isDark) 0.14f else 0.34f
 ): Modifier = this.then(
     Modifier
         .background(
             Brush.verticalGradient(
                 listOf(
-                    Color.White.copy(alpha = 0.22f),
+                    Color.White.copy(alpha = topHighlightAlpha),
+                    Color.White.copy(alpha = if (isDark) 0.04f else 0.10f),
                     Color.Transparent,
-                    Color.Black.copy(alpha = 0.035f)
+                    Color.Black.copy(alpha = if (isDark) 0.16f else 0.055f)
                 )
             ),
             shape
         )
-        .border(BorderStroke(0.8.dp, color), shape)
+        .border(
+            BorderStroke(
+                0.8.dp,
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (isDark) 0.30f else 0.62f),
+                        borderColor,
+                        Color.Black.copy(alpha = if (isDark) 0.24f else 0.06f)
+                    )
+                )
+            ),
+            shape
+        )
 )
 
 @Composable

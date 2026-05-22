@@ -54,6 +54,7 @@ import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.babyPageBackground
@@ -285,6 +286,7 @@ fun TimelineScreen() {
     var editingRecord by remember { mutableStateOf<TimelineRecord?>(null) }
     var playVideoPath by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     val scopedTimeline = remember(timeline, babyInfo.id) {
         timeline.filter { belongsToBaby(it.babyId, babyInfo.id) }
@@ -445,7 +447,9 @@ fun TimelineScreen() {
             if (grouped.isEmpty()) {
                 // ── Warmer empty state ────────────────────────────
                 Box(
-                    Modifier.fillMaxSize().padding(end = 8.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(end = 8.dp, bottom = bottomBarClearance),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -484,7 +488,11 @@ fun TimelineScreen() {
                     }
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = bottomBarClearance),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
                     grouped.forEach { (label, records) ->
                         // ── Month group header (prominent badge style) ──
                         item(key = "header-$label") {
@@ -980,7 +988,9 @@ fun TimelineScreen() {
             visible = true,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomBarClearance)
         ) {
             Box {
                 // Soft halo behind FAB

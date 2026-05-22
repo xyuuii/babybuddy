@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.motionListItem
 import java.time.Instant
@@ -65,6 +66,7 @@ fun FeedingScreen(onDismiss: () -> Unit) {
     var quickNumber by remember { mutableStateOf(feedingQuickEntryDefaultValue("formula")) }
     var quickNotes by remember { mutableStateOf("") }
     var deleteConfirmId by remember { mutableStateOf<String?>(null) }
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
     val todayRecords = remember(scopedFeedingRecords) {
@@ -123,7 +125,7 @@ fun FeedingScreen(onDismiss: () -> Unit) {
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = bottomBarClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Today summary card

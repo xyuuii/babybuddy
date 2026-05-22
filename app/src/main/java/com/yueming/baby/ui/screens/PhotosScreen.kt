@@ -110,6 +110,7 @@ import com.yueming.baby.ui.components.BabyMetricChip
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabyPill
 import com.yueming.baby.ui.components.BabySectionHeader
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.PhotoEntry
 import com.yueming.baby.data.belongsToBaby
@@ -503,11 +504,12 @@ private fun GalleryBottomSelectionBar(
     onDeleteClick: () -> Unit,
     onCancelClick: () -> Unit
 ) {
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp)
+            .padding(top = 10.dp, bottom = bottomBarClearance),
         shape = RoundedCornerShape(26.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
@@ -795,6 +797,7 @@ fun PhotosScreen() {
     val isLoading by DataManager.isLoading.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var viewerVisible by rememberSaveable { mutableStateOf(false) }
@@ -908,7 +911,9 @@ fun PhotosScreen() {
                             )
                         }
                     },
-                    modifier = Modifier.miuixFadeSlideIn(delayMillis = 120, initialTranslationY = 22f),
+                    modifier = Modifier
+                        .padding(bottom = bottomBarClearance)
+                        .miuixFadeSlideIn(delayMillis = 120, initialTranslationY = 22f),
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(22.dp),
@@ -970,7 +975,7 @@ fun PhotosScreen() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 10.dp, bottom = 110.dp),
+                            .padding(top = 10.dp, bottom = bottomBarClearance),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -1035,7 +1040,7 @@ fun PhotosScreen() {
                             .fillMaxSize()
                             .miuixFadeSlideIn(delayMillis = 80, initialTranslationY = 14f)
                             .transformable(state = pinchZoomState),
-                        contentPadding = PaddingValues(top = 10.dp, bottom = 112.dp),
+                        contentPadding = PaddingValues(top = 10.dp, bottom = bottomBarClearance),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
