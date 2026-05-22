@@ -55,6 +55,7 @@ import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
+import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.babyPageBackground
@@ -287,6 +288,7 @@ fun TimelineScreen() {
     var playVideoPath by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val bottomBarClearance = LocalBabyBottomBarClearance.current
+    val statusBarClearance = LocalBabyStatusBarClearance.current
 
     val scopedTimeline = remember(timeline, babyInfo.id) {
         timeline.filter { belongsToBaby(it.babyId, babyInfo.id) }
@@ -325,7 +327,11 @@ fun TimelineScreen() {
     val fabGlow = 0.72f
 
     Box(modifier = Modifier.fillMaxSize().babyPageBackground()) {
-        Column(modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 0.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 20.dp, end = 20.dp, top = statusBarClearance + 12.dp, bottom = 0.dp)
+        ) {
             Text(
                 "时间线",
                 style = MaterialTheme.typography.displaySmall,

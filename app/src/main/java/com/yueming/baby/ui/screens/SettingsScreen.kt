@@ -44,6 +44,7 @@ import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
+import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
@@ -93,10 +94,16 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bottomBarClearance = LocalBabyBottomBarClearance.current
+    val statusBarClearance = LocalBabyStatusBarClearance.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().babyPageBackground(),
-        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = bottomBarClearance),
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            top = statusBarClearance + 12.dp,
+            end = 20.dp,
+            bottom = bottomBarClearance
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
