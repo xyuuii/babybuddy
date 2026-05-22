@@ -49,6 +49,7 @@ import androidx.navigation.compose.rememberNavController
 import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
+import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.motionPressable
@@ -160,8 +161,12 @@ fun YueMingApp() {
             BabyLiquidBottomBarHeight +
             BabyLiquidBottomBarVerticalPadding * 2 +
             BabyLiquidBottomBarContentGap
+    val statusBarClearance = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    CompositionLocalProvider(LocalBabyBottomBarClearance provides bottomBarClearance) {
+    CompositionLocalProvider(
+        LocalBabyBottomBarClearance provides bottomBarClearance,
+        LocalBabyStatusBarClearance provides statusBarClearance
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

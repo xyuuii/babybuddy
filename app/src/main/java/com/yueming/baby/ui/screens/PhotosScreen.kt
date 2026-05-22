@@ -111,6 +111,7 @@ import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabyPill
 import com.yueming.baby.ui.components.BabySectionHeader
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
+import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.PhotoEntry
 import com.yueming.baby.data.belongsToBaby
@@ -798,6 +799,7 @@ fun PhotosScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bottomBarClearance = LocalBabyBottomBarClearance.current
+    val statusBarClearance = LocalBabyStatusBarClearance.current
 
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var viewerVisible by rememberSaveable { mutableStateOf(false) }
@@ -975,7 +977,7 @@ fun PhotosScreen() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 10.dp, bottom = bottomBarClearance),
+                            .padding(top = statusBarClearance + 10.dp, bottom = bottomBarClearance),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -1040,7 +1042,7 @@ fun PhotosScreen() {
                             .fillMaxSize()
                             .miuixFadeSlideIn(delayMillis = 80, initialTranslationY = 14f)
                             .transformable(state = pinchZoomState),
-                        contentPadding = PaddingValues(top = 10.dp, bottom = bottomBarClearance),
+                        contentPadding = PaddingValues(top = statusBarClearance + 10.dp, bottom = bottomBarClearance),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
