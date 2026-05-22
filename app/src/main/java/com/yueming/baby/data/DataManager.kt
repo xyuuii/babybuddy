@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.yueming.baby.data.cloud.CloudManager
@@ -100,12 +101,14 @@ object DataManager {
     private const val KEY_LOCAL_SETTINGS = "settings"
     private const val KEY_LOCAL_FEEDING = "feeding"
     private const val KEY_LOCAL_VACCINE = "vaccine_statuses"
+    private const val KEY_LOCAL_REMINDERS = "reminders"
     private const val KEY_LOCAL_CHAT_MESSAGES = "chat_messages"
     private const val KEY_LOCAL_DIRTY = "has_unsynced_changes"
     private const val KEY_SYNC_DEVICE_ID = "sync_device_id"
     private const val KEY_SYNC_REVISION = "sync_revision"
     private const val SYNC_META_FILE = "sync_meta.json"
     private const val NAS_SYNC_WORK_NAME = "yueming_nas_sync"
+    private const val REMINDER_WORK_PREFIX = "yueming_reminder_"
     private const val STARTUP_REMOTE_SYNC_DELAY_MS = 1_200L
     private const val AI_CONTEXT_MESSAGE_LIMIT = 24
 
@@ -269,6 +272,15 @@ object DataManager {
         }
     }
 
+    private fun Reminder.withDefaultBabyId(defaultBabyId: String): Reminder {
+        val currentBabyId: String? = babyId
+        return if (currentBabyId.isNullOrBlank() && defaultBabyId.isNotBlank()) {
+            copy(babyId = defaultBabyId)
+        } else {
+            this
+        }
+    }
+
     private val _timeline = MutableStateFlow<List<TimelineRecord>>(emptyList())
     val timeline: StateFlow<List<TimelineRecord>> = _timeline.asStateFlow()
 
@@ -280,6 +292,9 @@ object DataManager {
 
     private val _vaccineStatuses = MutableStateFlow(emptyList<VaccineStatus>())
     val vaccineStatuses: StateFlow<List<VaccineStatus>> = _vaccineStatuses.asStateFlow()
+
+    private val _reminders = MutableStateFlow(emptyList<Reminder>())
+    val reminders: StateFlow<List<Reminder>> = _reminders.asStateFlow()
 
     private val _customCategories = MutableStateFlow(emptyList<CategoryConfig>())
     val customCategories: StateFlow<List<CategoryConfig>> = _customCategories.asStateFlow()
@@ -438,6 +453,15 @@ object DataManager {
                 _vaccineStatuses.value = list.map { it.withDefaultBabyId(activeBabyId) }
             }
         }
+        prefs.getString(KEY_LOCAL_REMINDERS, null)?.let { json ->
+            runCatching {
+                val type = object : TypeToken<List<Reminder>>() {}.type
+                gson.fromJson<List<Reminder>>(json, type) ?: emptyList()
+            }.getOrNull()?.let { list ->
+                _reminders.value = list.map { it.withDefaultBabyId(activeBabyId) }
+                rescheduleReminderNotifications()
+            }
+        }
         prefs.getString(KEY_LOCAL_CHAT_MESSAGES, null)?.let { json ->
             runCatching {
                 val type = object : TypeToken<List<ChatMessage>>() {}.type
@@ -458,6 +482,7 @@ object DataManager {
             .putString(KEY_LOCAL_PHOTOS, gson.toJson(_photos.value))
             .putString(KEY_LOCAL_FEEDING, gson.toJson(_feedingRecords.value))
             .putString(KEY_LOCAL_VACCINE, gson.toJson(_vaccineStatuses.value))
+            .putString(KEY_LOCAL_REMINDERS, gson.toJson(_reminders.value))
             .putString(KEY_LOCAL_CHAT_MESSAGES, gson.toJson(_chatMessages.value))
             .putString(KEY_LOCAL_SETTINGS, gson.toJson(buildSettingsMap()))
             .apply()
@@ -556,6 +581,7 @@ object DataManager {
             _photos.value.isNotEmpty() ||
             _feedingRecords.value.isNotEmpty() ||
             _vaccineStatuses.value.isNotEmpty() ||
+            _reminders.value.isNotEmpty() ||
             _chatMessages.value.isNotEmpty()
     }
 
@@ -567,6 +593,7 @@ object DataManager {
             "photos.json",
             "feeding.json",
             "vaccine_statuses.json",
+            "reminders.json",
             "chat_messages.json"
         )
         return files.any { fileName ->
@@ -702,10 +729,12 @@ object DataManager {
         reconcilePhotosWithRemoteSafely(config)
         loadFeedingFromWebDav(config)
         loadVaccinesFromWebDav(config)
+        loadRemindersFromWebDav(config)
         loadAiProfilesFromWebDav(config)
         loadChatMessagesFromWebDav(config)
         rememberRemoteMetadataIfPresent(config)
         saveLocalDataSnapshot()
+        rescheduleReminderNotifications()
         uploadPendingMedia(config)
         refreshSyncStatus("NAS 同步完成", isSyncing = false)
     }
@@ -737,7 +766,8 @@ object DataManager {
                 val chatOk = WebDavManager.writeJson(config, "$dataPath/chat_messages.json", gson.toJson(_chatMessages.value)).getOrDefault(false)
                 val feedingOk = WebDavManager.writeJson(config, "$dataPath/feeding.json", gson.toJson(_feedingRecords.value)).getOrDefault(false)
                 val vaccineOk = WebDavManager.writeJson(config, "$dataPath/vaccine_statuses.json", gson.toJson(_vaccineStatuses.value)).getOrDefault(false)
-                val allOk = babiesOk && timelineOk && photosOk && settingsOk && aiOk && chatOk && feedingOk && vaccineOk
+                val remindersOk = WebDavManager.writeJson(config, "$dataPath/reminders.json", gson.toJson(_reminders.value)).getOrDefault(false)
+                val allOk = babiesOk && timelineOk && photosOk && settingsOk && aiOk && chatOk && feedingOk && vaccineOk && remindersOk
                 if (allOk) recordRemoteWrite(config)
                 markUnsyncedLocalChanges(!allOk)
                 refreshSyncStatus(
@@ -911,6 +941,27 @@ object DataManager {
             },
             onFailure = {
                 android.util.Log.i("DataManager", "vaccine_statuses.json unavailable, keeping local snapshot")
+            }
+        )
+    }
+
+    private suspend fun loadRemindersFromWebDav(config: WebDavManager.WebDavConfig) {
+        val result = WebDavManager.readJson(config, "${dataRootPath(config)}/reminders.json")
+        result.fold(
+            onSuccess = { json ->
+                try {
+                    val type = object : TypeToken<List<Reminder>>() {}.type
+                    val list: List<Reminder> = gson.fromJson(json, type) ?: emptyList()
+                    if (list.isNotEmpty()) {
+                        _reminders.value = list.map { it.withDefaultBabyId(activeBabyId) }
+                        android.util.Log.d("DataManager", "Loaded ${list.size} reminders from WebDAV")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DataManager", "Failed to parse reminders.json", e)
+                }
+            },
+            onFailure = {
+                android.util.Log.i("DataManager", "reminders.json unavailable, keeping local snapshot")
             }
         )
     }
@@ -1409,6 +1460,27 @@ object DataManager {
         }
     }
 
+    private fun saveReminders() {
+        saveLocalDataSnapshot()
+        appScope.launch {
+            writeMutex.withLock {
+                try {
+                    val config = getWebDavConfigOrNull() ?: run {
+                        markUnsyncedLocalChanges()
+                        return@withLock
+                    }
+                    val json = gson.toJson(_reminders.value)
+                    val result = writeDataJsonWithConflictGuard(config, "reminders.json", json)
+                    if (!result) markUnsyncedLocalChanges()
+                    android.util.Log.d("DataManager", "Saved ${_reminders.value.size} reminders to WebDAV, result: $result")
+                } catch (e: Exception) {
+                    markUnsyncedLocalChanges()
+                    android.util.Log.e("DataManager", "Failed to save reminders", e)
+                }
+            }
+        }
+    }
+
     // --- Cloud Storage Config ---
     fun saveCloudStorageConfig(config: CloudStorageConfig) {
         _cloudStorageConfig.value = config
@@ -1467,6 +1539,40 @@ object DataManager {
         loadLocalDataSnapshot()
     }
 
+    private fun scheduleReminderNotification(reminder: Reminder) {
+        val context = appContext ?: return
+        if (!reminder.notify || reminder.isCompleted) {
+            cancelReminderNotification(reminder.id)
+            return
+        }
+        val delayMs = maxOf(0L, reminder.dueAt - System.currentTimeMillis())
+        val request = OneTimeWorkRequestBuilder<ReminderNotificationWorker>()
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+            .setInputData(
+                workDataOf(
+                    ReminderNotificationWorker.KEY_REMINDER_ID to reminder.id,
+                    ReminderNotificationWorker.KEY_TITLE to reminder.title,
+                    ReminderNotificationWorker.KEY_NOTES to reminder.notes,
+                    ReminderNotificationWorker.KEY_DUE_AT to reminder.dueAt
+                )
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "$REMINDER_WORK_PREFIX${reminder.id}",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    private fun cancelReminderNotification(reminderId: String) {
+        val context = appContext ?: return
+        WorkManager.getInstance(context).cancelUniqueWork("$REMINDER_WORK_PREFIX$reminderId")
+    }
+
+    private fun rescheduleReminderNotifications() {
+        _reminders.value.forEach { scheduleReminderNotification(it) }
+    }
+
     // --- Baby Management ---
     fun addBaby(info: BabyInfo) {
         val entityId = if (info.id.isEmpty()) java.util.UUID.randomUUID().toString() else info.id
@@ -1499,11 +1605,16 @@ object DataManager {
         _photos.value = _photos.value.filter { !isStrictlyForBaby(it.babyId, babyId) }.toMutableList()
         _feedingRecords.value = _feedingRecords.value.filter { !isStrictlyForBaby(it.babyId, babyId) }
         _vaccineStatuses.value = _vaccineStatuses.value.filter { !isStrictlyForBaby(it.babyId, babyId) }
+        _reminders.value
+            .filter { isStrictlyForBaby(it.babyId, babyId) }
+            .forEach { cancelReminderNotification(it.id) }
+        _reminders.value = _reminders.value.filter { !isStrictlyForBaby(it.babyId, babyId) }
         saveBabies()
         saveTimeline()
         savePhotos()
         saveFeeding()
         saveVaccines()
+        saveReminders()
         appScope.launch {
             cleanupDeletedMedia(deletedPhotos)
             if (_activeBaby.value.id == babyId) {
@@ -2303,6 +2414,20 @@ object DataManager {
                     "batchNumber" to it.batchNumber, "notes" to it.notes
                 )
             },
+            "reminders" to _reminders.value.map {
+                mapOf(
+                    "id" to it.id,
+                    "babyId" to it.babyId,
+                    "title" to it.title,
+                    "dueAt" to it.dueAt,
+                    "category" to it.category,
+                    "notes" to it.notes,
+                    "notify" to it.notify,
+                    "calendarSynced" to it.calendarSynced,
+                    "completedAt" to it.completedAt,
+                    "createdAt" to it.createdAt
+                )
+            },
             "chatMessages" to _chatMessages.value.map {
                 mapOf(
                     "id" to it.id,
@@ -2450,6 +2575,31 @@ object DataManager {
                     }
                 }
 
+                val reminderList = map["reminders"] as? List<*>
+                if (reminderList != null) {
+                    val importedReminders = reminderList.mapNotNull { item ->
+                        val m = item as? Map<*, *> ?: return@mapNotNull null
+                        Reminder(
+                            id = m["id"] as? String ?: return@mapNotNull null,
+                            babyId = m["babyId"] as? String ?: _activeBaby.value.id,
+                            title = m["title"] as? String ?: return@mapNotNull null,
+                            dueAt = (m["dueAt"] as? Number)?.toLong() ?: return@mapNotNull null,
+                            category = m["category"] as? String ?: REMINDER_CATEGORY_CHECKUP,
+                            notes = m["notes"] as? String ?: "",
+                            notify = m["notify"] as? Boolean ?: true,
+                            calendarSynced = m["calendarSynced"] as? Boolean ?: false,
+                            completedAt = (m["completedAt"] as? Number)?.toLong(),
+                            createdAt = (m["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                        )
+                    }
+                    if (importedReminders.isNotEmpty()) {
+                        _reminders.value = importedReminders.map { it.withDefaultBabyId(activeBabyId) }
+                        rescheduleReminderNotifications()
+                        saveReminders()
+                        imported = true
+                    }
+                }
+
                 // Import settings
                 val settingsMap = map["settings"] as? Map<*, *>
                 if (settingsMap != null) {
@@ -2509,6 +2659,8 @@ object DataManager {
             _chatMessages.value = emptyList()
             _feedingRecords.value = emptyList()
             _vaccineStatuses.value = emptyList()
+            _reminders.value.forEach { cancelReminderNotification(it.id) }
+            _reminders.value = emptyList()
             _themeMode.value = ThemeMode.SYSTEM
             _webDavConfig.value = null
             _cloudStorageConfig.value = CloudStorageConfig()
@@ -2529,7 +2681,8 @@ object DataManager {
                             WebDavManager.writeJson(remoteConfig, "$dataPath/chat_messages.json", emptyListJson).getOrDefault(false),
                             WebDavManager.writeJson(remoteConfig, "$dataPath/settings.json", gson.toJson(buildSettingsMap())).getOrDefault(false),
                             WebDavManager.writeJson(remoteConfig, "$dataPath/feeding.json", emptyListJson).getOrDefault(false),
-                            WebDavManager.writeJson(remoteConfig, "$dataPath/vaccine_statuses.json", emptyListJson).getOrDefault(false)
+                            WebDavManager.writeJson(remoteConfig, "$dataPath/vaccine_statuses.json", emptyListJson).getOrDefault(false),
+                            WebDavManager.writeJson(remoteConfig, "$dataPath/reminders.json", emptyListJson).getOrDefault(false)
                         ).all { it }
                         if (cleared) recordRemoteWrite(remoteConfig)
                         markUnsyncedLocalChanges(!cleared)
@@ -2588,6 +2741,40 @@ object DataManager {
         val breastCount = todayRecords.count { it.type == "breast" }
         val totalCount = todayRecords.size
         return totalCount to formulaMl
+    }
+
+    // --- Reminder CRUD ---
+    fun upsertReminder(reminder: Reminder) {
+        val scopedReminder = reminder.withDefaultBabyId(activeBabyId)
+        val existing = _reminders.value.toMutableList()
+        val index = existing.indexOfFirst { it.id == scopedReminder.id }
+        if (index >= 0) existing[index] = scopedReminder else existing.add(scopedReminder)
+        _reminders.value = existing.sortedWith(compareBy<Reminder> { it.isCompleted }.thenBy { it.dueAt })
+        scheduleReminderNotification(scopedReminder)
+        saveReminders()
+    }
+
+    fun completeReminder(id: String) {
+        val completedAt = System.currentTimeMillis()
+        _reminders.value = _reminders.value.map { reminder ->
+            if (reminder.id == id) reminder.copy(completedAt = completedAt) else reminder
+        }
+        cancelReminderNotification(id)
+        saveReminders()
+    }
+
+    fun reopenReminder(id: String) {
+        val reminder = _reminders.value.firstOrNull { it.id == id } ?: return
+        val reopened = reminder.copy(completedAt = null)
+        _reminders.value = _reminders.value.map { if (it.id == id) reopened else it }
+        scheduleReminderNotification(reopened)
+        saveReminders()
+    }
+
+    fun deleteReminder(id: String) {
+        _reminders.value = _reminders.value.filter { it.id != id }
+        cancelReminderNotification(id)
+        saveReminders()
     }
 
     // --- Vaccine CRUD ---

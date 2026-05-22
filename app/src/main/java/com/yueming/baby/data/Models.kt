@@ -92,6 +92,41 @@ data class ChatMessage(
     val timestamp: Long
 )
 
+const val REMINDER_CATEGORY_CHECKUP = "checkup"
+const val REMINDER_CATEGORY_VACCINE = "vaccine"
+const val REMINDER_CATEGORY_MEDICINE = "medicine"
+const val REMINDER_CATEGORY_TEST = "test"
+const val REMINDER_CATEGORY_OTHER = "other"
+
+data class ReminderCategory(
+    val id: String,
+    val label: String,
+    val color: Long
+)
+
+val REMINDER_CATEGORIES = listOf(
+    ReminderCategory(REMINDER_CATEGORY_CHECKUP, "复查", 0xFFEC407A),
+    ReminderCategory(REMINDER_CATEGORY_VACCINE, "疫苗", 0xFF4CAF50),
+    ReminderCategory(REMINDER_CATEGORY_MEDICINE, "用药", 0xFF42A5F5),
+    ReminderCategory(REMINDER_CATEGORY_TEST, "检查", 0xFFF6BA6D),
+    ReminderCategory(REMINDER_CATEGORY_OTHER, "其他", 0xFF9E9E9E)
+)
+
+data class Reminder(
+    val id: String,
+    val babyId: String = "",
+    val title: String,
+    val dueAt: Long,
+    val category: String = REMINDER_CATEGORY_CHECKUP,
+    val notes: String = "",
+    val notify: Boolean = true,
+    val calendarSynced: Boolean = false,
+    val completedAt: Long? = null,
+    val createdAt: Long = System.currentTimeMillis()
+) {
+    val isCompleted: Boolean get() = completedAt != null
+}
+
 data class AIConfig(
     val apiBaseUrl: String = "https://api.deepseek.com",
     val apiKey: String = "",

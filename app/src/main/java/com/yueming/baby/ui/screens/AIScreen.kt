@@ -2,7 +2,9 @@ package com.yueming.baby.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -67,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -75,8 +79,11 @@ import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.ChatMessage
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
+import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.MarkdownText
+import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.MotionAnimatedContent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -151,7 +158,7 @@ fun AIScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .babyPageBackground()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             CompactAssistantHeader(
@@ -236,7 +243,7 @@ private fun CompactAssistantHeader(
     messageCount: Int,
     onClear: () -> Unit
 ) {
-    Surface(color = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
+    Surface(color = Color.Transparent, tonalElevation = 0.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -284,35 +291,20 @@ private fun WelcomeContent(
             .padding(top = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
+        AssistantIntroCard(
+            title = "AI 成长助手",
+            subtitle = babyContextSummary,
+            badge = "Ask BabyBuddy",
             modifier = Modifier
-                .size(84.dp)
-                .shadow(8.dp, CircleShape, spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.SmartToy,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-
+                .fillMaxWidth()
+                .heightIn(min = 146.dp)
+        )
         Spacer(Modifier.height(18.dp))
         Text(
             "\u6709\u4ec0\u4e48\u60f3\u95ee\u7684\uff1f",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            babyContextSummary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 20.dp)
         )
 
         Spacer(Modifier.height(22.dp))
@@ -381,13 +373,13 @@ private fun ChatBubble(
                         RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp)
                     },
                     color = if (isUser) {
-                        MaterialTheme.colorScheme.primary
+                        BabyPalette.Rose
                     } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
                     },
                     tonalElevation = if (isUser) 0.dp else 2.dp,
                     shadowElevation = if (isUser) 0.dp else 1.dp,
-                    border = if (isUser) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    border = if (isUser) null else BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 11.dp)) {
                         when {
@@ -435,19 +427,116 @@ private fun ChatBubble(
 }
 @Composable
 private fun AssistantAvatar(isActive: Boolean) {
+    val avatarScale by animateFloatAsState(
+        targetValue = if (isActive) 1.08f else 1f,
+        animationSpec = BabyMotion.defaultSpatial<Float>(),
+        label = "assistantAvatarScale"
+    )
+    val avatarColor by animateColorAsState(
+        targetValue = if (isActive) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "assistantAvatarColor"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (isActive) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "assistantAvatarIcon"
+    )
+
     Box(
         modifier = Modifier
             .size(34.dp)
+            .graphicsLayer {
+                scaleX = avatarScale
+                scaleY = avatarScale
+            }
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(avatarColor),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             Icons.Default.SmartToy,
             contentDescription = null,
-            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer,
+            tint = iconColor,
             modifier = Modifier.size(18.dp)
         )
+    }
+}
+
+@Composable
+private fun AssistantIntroCard(
+    title: String,
+    subtitle: String,
+    badge: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(30.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        border = BorderStroke(0.6.dp, BabyPalette.Blue.copy(alpha = 0.22f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(BabyPalette.Blue.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.SmartToy,
+                    contentDescription = null,
+                    tint = BabyPalette.Blue,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = BabyPalette.Blue.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = badge,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = BabyPalette.Blue
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3
+                )
+            }
+        }
     }
 }
 
@@ -510,7 +599,7 @@ private fun InputRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
@@ -536,10 +625,10 @@ private fun InputRow(
                     },
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        focusedBorderColor = BabyPalette.Rose.copy(alpha = 0.35f),
                         unfocusedBorderColor = Color.Transparent,
                         disabledBorderColor = Color.Transparent
                     )
@@ -554,15 +643,29 @@ private fun InputRow(
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "发送",
-                        tint = if (enabled && value.isNotBlank()) {
-                            MaterialTheme.colorScheme.onPrimary
+                    val buttonState = when {
+                        !enabled -> "loading"
+                        value.isNotBlank() -> "ready"
+                        else -> "idle"
+                    }
+                    MotionAnimatedContent(
+                        targetState = buttonState,
+                        label = "aiSendButtonState"
+                    ) { state ->
+                        if (state == "loading") {
+                            TinyDots()
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送",
+                                tint = if (state == "ready") {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -574,44 +677,17 @@ private fun NotConfiguredView() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .babyPageBackground()
             .padding(28.dp),
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(
-                modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(82.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.SmartToy,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                Spacer(Modifier.height(18.dp))
-                Text("先配置一个 AI Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "配置 API Key 后，AI 助手会结合宝宝资料、成长记录、喂养和疫苗状态给出建议。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
-                )
-            }
-        }
+        AssistantIntroCard(
+            title = "先配置一个 AI Profile",
+            subtitle = "配置 API Key 后，AI 助手会结合宝宝资料、成长记录、喂养和疫苗状态给出建议。",
+            badge = "AI",
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 188.dp)
+        )
     }
 }

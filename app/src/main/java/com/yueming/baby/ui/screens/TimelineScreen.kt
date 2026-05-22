@@ -1,6 +1,13 @@
 package com.yueming.baby.ui.screens
 
+import android.Manifest
 import android.app.TimePickerDialog
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -40,11 +49,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
+import com.yueming.baby.ui.components.babyPageBackground
+import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.motionCardPress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,11 +68,12 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-private val primaryPink = Color(0xFFEC407A)
+private val primaryPink = BabyPalette.Rose
 
 private fun catIcon(catId: String): ImageVector = when (catId) {
     "milestone" -> Icons.Default.Star
@@ -70,6 +85,25 @@ private fun catIcon(catId: String): ImageVector = when (catId) {
     else        -> Icons.Default.Description
 }
 
+private fun appendRecognizedText(current: String, recognized: String): String {
+    val cleaned = recognized.trim()
+    if (cleaned.isBlank()) return current
+    return if (current.isBlank()) cleaned else current.trimEnd() + "\n" + cleaned
+}
+
+private fun speechErrorText(error: Int): String = when (error) {
+    SpeechRecognizer.ERROR_AUDIO -> "麦克风暂时不可用"
+    SpeechRecognizer.ERROR_CLIENT -> "语音输入已取消"
+    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "需要麦克风权限"
+    SpeechRecognizer.ERROR_NETWORK,
+    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络不稳定，稍后再试"
+    SpeechRecognizer.ERROR_NO_MATCH -> "没有听清楚，再说一次试试"
+    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音服务正忙，稍后再试"
+    SpeechRecognizer.ERROR_SERVER -> "语音服务暂时不可用"
+    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有听到声音"
+    else -> "语音输入失败，请重试"
+}
+
 @Composable
 private fun TimelineHeroCard(
     nickname: String,
@@ -77,33 +111,66 @@ private fun TimelineHeroCard(
     activeCategoryLabel: String
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(34.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 118.dp),
+        shape = RoundedCornerShape(32.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+        ),
+        border = BorderStroke(0.6.dp, primaryPink.copy(alpha = 0.18f))
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(primaryPink.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(primaryPink.copy(alpha = 0.13f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = primaryPink
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "${nickname.ifBlank { "宝宝" }}的成长时光",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = primaryPink.copy(alpha = 0.12f)
                 ) {
-                    Icon(Icons.Default.AutoStories, null, Modifier.size(26.dp), tint = primaryPink)
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
                     Text(
-                        "共 $totalCount 条记录 · 当前查看 $activeCategoryLabel",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Timeline",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryPink
                     )
                 }
             }
@@ -119,14 +186,43 @@ private fun TimelineFilterChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val chipCorner by animateDpAsState(
+        targetValue = if (pressed || selected) 24.dp else 22.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "timelineFilterCorner"
+    )
+    val chipColor by animateColorAsState(
+        targetValue = if (selected) {
+            accent.copy(alpha = if (pressed) 0.2f else 0.14f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = if (pressed) 1f else 0.92f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "timelineFilterColor"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) {
+            accent.copy(alpha = if (pressed) 0.46f else 0.34f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (pressed) 0.42f else 0.28f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "timelineFilterBorder"
+    )
+
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = if (selected) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        border = BorderStroke(
-            0.5.dp,
-            if (selected) accent.copy(alpha = 0.34f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
-        ),
-        modifier = Modifier.clickable(onClick = onClick)
+        shape = RoundedCornerShape(chipCorner),
+        color = chipColor,
+        border = BorderStroke(0.5.dp, borderColor),
+        modifier = Modifier
+            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.96f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
@@ -223,26 +319,10 @@ fun TimelineScreen() {
         groups
     }
 
-    // FAB pulse animation
-    val infiniteTransition = rememberInfiniteTransition()
-    val fabScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    val fabGlow by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
+    val fabScale = 1f
+    val fabGlow = 0.72f
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().babyPageBackground()) {
         Column(modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 0.dp)) {
             Text(
                 "时间线",
@@ -276,6 +356,12 @@ fun TimelineScreen() {
                 }
             }
 
+            Spacer(Modifier.height(12.dp))
+            TimelineHeroCard(
+                nickname = babyInfo.nickname,
+                totalCount = scopedTimeline.size,
+                activeCategoryLabel = activeCategoryLabel
+            )
             Spacer(Modifier.height(16.dp))
             // Header
             Row(
@@ -362,36 +448,37 @@ fun TimelineScreen() {
                     Modifier.fillMaxSize().padding(end = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Decorative circle behind icon
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(100.dp)
-                                .background(
-                                    primaryPink.copy(alpha = 0.08f),
-                                    CircleShape
-                                ),
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(primaryPink.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.EmojiEvents,
+                                Icons.Default.Star,
                                 contentDescription = null,
-                                Modifier.size(48.dp),
-                                tint = primaryPink.copy(alpha = 0.5f)
+                                modifier = Modifier.size(34.dp),
+                                tint = primaryPink
                             )
                         }
-                        Spacer(Modifier.height(20.dp))
                         Text(
-                            "还没有记录哦~",
+                            text = "还没有记录",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "点击下方按钮\n记录宝宝的每一个珍贵时刻",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            text = "添加第一条时间线，记录宝宝的每一个珍贵时刻。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -465,6 +552,20 @@ fun TimelineScreen() {
                             val isFirst = index == 0
                             val isLast = index == records.lastIndex
                             val totalInGroup = records.size
+                            val recordInteraction = remember(record.id) { MutableInteractionSource() }
+                            val recordPressed by recordInteraction.collectIsPressedAsState()
+                            val recordCorner by animateDpAsState(
+                                targetValue = if (recordPressed) 30.dp else 26.dp,
+                                animationSpec = BabyMotion.cardShapeSpring(),
+                                label = "timelineRecordCorner"
+                            )
+                            val recordContainerColor by animateColorAsState(
+                                targetValue = MaterialTheme.colorScheme.surface.copy(
+                                    alpha = if (recordPressed) 0.98f else 0.92f
+                                ),
+                                animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+                                label = "timelineRecordContainer"
+                            )
 
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 // ── Left timeline column: dot + line ──
@@ -536,12 +637,23 @@ fun TimelineScreen() {
                                         modifier = Modifier
                                             .animateItem()
                                             .fillMaxWidth()
-                                            .padding(start = 5.dp),
-                                        shape = RoundedCornerShape(26.dp),
+                                            .padding(start = 5.dp)
+                                            .motionCardPress(
+                                                interactionSource = recordInteraction,
+                                                pressedScale = 0.985f
+                                            )
+                                            .clickable(
+                                                interactionSource = recordInteraction,
+                                                indication = null
+                                            ) {
+                                                editingRecord = record
+                                                showAddDialog = true
+                                            },
+                                        shape = RoundedCornerShape(recordCorner),
                                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                                         border = BorderStroke(0.5.dp, catColor.copy(alpha = 0.18f)),
                                         colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                                            containerColor = recordContainerColor
                                         )
                                     ) {
                                         Column(Modifier.padding(16.dp)) {
@@ -1030,18 +1142,172 @@ private fun AddRecordDialog(
         }
     }
 
+    var showVoiceSheet by remember { mutableStateOf(false) }
+    var isListening by remember { mutableStateOf(false) }
+    var voiceDraft by remember { mutableStateOf("") }
+    var voiceError by remember { mutableStateOf<String?>(null) }
+    var voiceLevel by remember { mutableStateOf(0.18f) }
+
+    val speechRecognizer = remember(context) {
+        runCatching { SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
+    }
+
+    fun startListening() {
+        if (speechRecognizer == null) {
+            showVoiceSheet = true
+            isListening = false
+            voiceError = "当前设备没有可用的语音识别服务"
+            return
+        }
+
+        showVoiceSheet = true
+        isListening = true
+        voiceDraft = ""
+        voiceError = null
+        voiceLevel = 0.18f
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+
+        runCatching {
+            speechRecognizer.cancel()
+            speechRecognizer.startListening(intent)
+        }.onFailure {
+            isListening = false
+            voiceError = "语音服务启动失败，请重试"
+        }
+    }
+
+    fun stopListening() {
+        speechRecognizer?.stopListening()
+        isListening = false
+    }
+
+    fun closeVoiceSheet() {
+        speechRecognizer?.cancel()
+        showVoiceSheet = false
+        isListening = false
+        voiceLevel = 0.18f
+    }
+
+    fun commitVoiceDraft() {
+        if (voiceDraft.isNotBlank()) {
+            description = appendRecognizedText(description, voiceDraft)
+            closeVoiceSheet()
+            voiceDraft = ""
+            voiceError = null
+        }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startListening()
+        } else {
+            showVoiceSheet = true
+            isListening = false
+            voiceError = "允许麦克风权限后才能语音输入"
+        }
+    }
+
+    fun startSpeechInput() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            startListening()
+        } else {
+            showVoiceSheet = true
+            voiceDraft = ""
+            voiceError = "需要麦克风权限"
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(speechRecognizer) {
+        val listener = object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                isListening = true
+                voiceError = null
+            }
+
+            override fun onBeginningOfSpeech() {
+                isListening = true
+            }
+
+            override fun onRmsChanged(rmsdB: Float) {
+                voiceLevel = ((rmsdB + 2f) / 12f).coerceIn(0.12f, 1f)
+            }
+
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+
+            override fun onEndOfSpeech() {
+                isListening = false
+                voiceLevel = 0.18f
+            }
+
+            override fun onError(error: Int) {
+                isListening = false
+                voiceLevel = 0.18f
+                if (showVoiceSheet) {
+                    voiceError = speechErrorText(error)
+                }
+            }
+
+            override fun onResults(results: Bundle?) {
+                val recognized = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    .orEmpty()
+
+                isListening = false
+                voiceLevel = 0.18f
+                if (recognized.isNotBlank()) {
+                    voiceDraft = recognized
+                    voiceError = null
+                } else {
+                    voiceError = "没有识别到内容"
+                }
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {
+                val partial = partialResults
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    .orEmpty()
+
+                if (partial.isNotBlank()) {
+                    voiceDraft = partial
+                }
+            }
+
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        }
+
+        speechRecognizer?.setRecognitionListener(listener)
+        onDispose {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        }
+    }
+
     AppEditorDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface
     ) { requestClose ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // ── Header row ─────────────────────────────────────
             Row(
                 Modifier.fillMaxWidth(),
@@ -1077,7 +1343,12 @@ private fun AddRecordDialog(
                 placeholder = { Text("记录下这个珍贵时刻...") },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                trailingIcon = {
+                    IconButton(onClick = { startSpeechInput() }) {
+                        Icon(Icons.Default.Mic, contentDescription = "语音输入")
+                    }
+                }
             )
 
             // ── Date & Time section ────────────────────────────
@@ -1434,6 +1705,47 @@ private fun AddRecordDialog(
                     fontWeight = FontWeight.Medium
                 )
             }
+            }
+
+            AnimatedVisibility(
+                visible = showVoiceSheet,
+                enter = fadeIn(animationSpec = tween(140)),
+                exit = fadeOut(animationSpec = tween(120)),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.18f))
+                        .clickable { closeVoiceSheet() }
+                )
+            }
+
+            AnimatedVisibility(
+                visible = showVoiceSheet,
+                enter = fadeIn(animationSpec = tween(160)) +
+                    slideInVertically(
+                        animationSpec = tween(260),
+                        initialOffsetY = { it / 2 }
+                    ),
+                exit = fadeOut(animationSpec = tween(120)) +
+                    slideOutVertically(
+                        animationSpec = tween(180),
+                        targetOffsetY = { it / 2 }
+                    ),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                VoiceInputSheet(
+                    isListening = isListening,
+                    voiceLevel = voiceLevel,
+                    transcript = voiceDraft,
+                    error = voiceError,
+                    onStop = { stopListening() },
+                    onRetry = { startListening() },
+                    onDismiss = { closeVoiceSheet() },
+                    onCommit = { commitVoiceDraft() }
+                )
+            }
         }
     }
 
@@ -1469,6 +1781,196 @@ private fun AddRecordDialog(
 // ──────────────────────────────────────────────────────────────────────
 // Reusable section header with icon
 // ──────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun VoiceInputSheet(
+    isListening: Boolean,
+    voiceLevel: Float,
+    transcript: String,
+    error: String?,
+    onStop: () -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    onCommit: () -> Unit
+) {
+    val pulseScale by animateFloatAsState(
+        targetValue = if (isListening) 1f + voiceLevel * 0.16f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "voicePulseScale"
+    )
+    val displayText = when {
+        transcript.isNotBlank() -> transcript
+        error != null -> error
+        isListening -> "我在听，慢慢说"
+        else -> "准备开始语音输入"
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 8.dp,
+        shadowElevation = 18.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f))
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .scale(pulseScale)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        primaryPink,
+                                        primaryPink.copy(alpha = 0.35f),
+                                        primaryPink.copy(alpha = 0.10f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = null,
+                            modifier = Modifier.size(25.dp),
+                            tint = Color.White
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (isListening) "正在听你说" else "语音输入",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            listOf(0.55f, 0.88f, 1f, 0.72f, 0.95f).forEach { factor ->
+                                Box(
+                                    modifier = Modifier
+                                        .width(5.dp)
+                                        .height((8f + 24f * voiceLevel * factor).dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            primaryPink.copy(
+                                                alpha = if (isListening) 0.72f else 0.28f
+                                            )
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭")
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = if (error != null && transcript.isBlank()) {
+                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+            ) {
+                Text(
+                    displayText,
+                    modifier = Modifier.padding(14.dp),
+                    minLines = 2,
+                    maxLines = 5,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (error != null && transcript.isBlank()) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "取消")
+                }
+
+                OutlinedButton(
+                    onClick = if (isListening) onStop else onRetry,
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        if (isListening) Icons.Default.Stop else Icons.Default.Refresh,
+                        contentDescription = if (isListening) "停止" else "重试",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Button(
+                    onClick = onCommit,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    enabled = transcript.isNotBlank() && !isListening,
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryPink),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "加入描述",
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {

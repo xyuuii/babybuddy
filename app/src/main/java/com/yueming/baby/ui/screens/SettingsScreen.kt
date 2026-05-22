@@ -6,9 +6,13 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,6 +43,10 @@ import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.babyPageBackground
+import com.yueming.baby.ui.motion.BabyMotion
+import com.yueming.baby.ui.motion.MotionAnimatedContent
+import com.yueming.baby.ui.motion.motionCardPress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -85,7 +93,7 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().babyPageBackground(),
         contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -183,8 +191,9 @@ fun SettingsScreen() {
             Card(
                 modifier = Modifier.fillMaxWidth().animateItem(),
                 shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
             ) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -211,8 +220,9 @@ fun SettingsScreen() {
             Card(
                 modifier = Modifier.fillMaxWidth().animateItem(),
                 shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
             ) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -438,7 +448,7 @@ private fun MiuixSettingsHeader(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(34.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
@@ -510,19 +520,57 @@ private fun SettingsGroupCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val cardCorner by animateDpAsState(
+        targetValue = if (pressed) 34.dp else 30.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "settingsGroupCardCorner"
+    )
+    val iconCorner by animateDpAsState(
+        targetValue = if (pressed) 22.dp else 18.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "settingsGroupIconCorner"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (pressed) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "settingsGroupContainer"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (pressed) {
+            iconTint.copy(alpha = 0.24f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)
+        },
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "settingsGroupBorder"
+    )
+
     Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(30.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.978f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        shape = RoundedCornerShape(cardCorner),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        border = BorderStroke(0.5.dp, borderColor),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Row(
             Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(18.dp))
+                Modifier.size(46.dp).clip(RoundedCornerShape(iconCorner))
                     .background(iconTint.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -571,13 +619,37 @@ private fun SyncStatusCard(
         if (status.pendingMediaCount > 0) append(" · 待上传 ${status.pendingMediaCount} 个媒体")
         if (status.hasUnsyncedChanges) append(" · 有本地改动")
     }
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val cardCorner by animateDpAsState(
+        targetValue = if (pressed) 36.dp else 32.dp,
+        animationSpec = BabyMotion.cardShapeSpring(),
+        label = "syncStatusCardCorner"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = accent.copy(alpha = if (pressed) 0.12f else 0.08f),
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "syncStatusContainer"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = accent.copy(alpha = if (pressed) 0.32f else 0.22f),
+        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
+        label = "syncStatusBorder"
+    )
 
     Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onDetails),
-        shape = RoundedCornerShape(32.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.982f)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDetails
+            ),
+        shape = RoundedCornerShape(cardCorner),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.22f)),
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.08f))
+        border = BorderStroke(0.5.dp, borderColor),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Column(
             Modifier.padding(18.dp).fillMaxWidth(),
@@ -589,15 +661,20 @@ private fun SyncStatusCard(
                         .background(accent.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (status.isSyncing) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = accent)
-                    } else {
-                        Icon(
-                            if (status.hasUnsyncedChanges || status.pendingMediaCount > 0 || !status.isConfigured) Icons.Default.SyncProblem else Icons.Default.CloudDone,
-                            null,
-                            Modifier.size(23.dp),
-                            tint = accent
-                        )
+                    MotionAnimatedContent(
+                        targetState = status.isSyncing,
+                        label = "syncStatusIcon"
+                    ) { syncing ->
+                        if (syncing) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = accent)
+                        } else {
+                            Icon(
+                                if (status.hasUnsyncedChanges || status.pendingMediaCount > 0 || !status.isConfigured) Icons.Default.SyncProblem else Icons.Default.CloudDone,
+                                null,
+                                Modifier.size(23.dp),
+                                tint = accent
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(14.dp))
@@ -709,8 +786,8 @@ private fun MiuixSheetCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(30.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
