@@ -11,10 +11,17 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        mavenCentral()
+        maven {
+            url = uri("https://maven.aliyun.com/repository/google")
+            content {
+                includeGroupByRegex("androidx\\..*")
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google\\.android.*")
+            }
+        }
         maven { url = uri("https://maven.aliyun.com/repository/public") }
         google()
-        mavenCentral()
     }
 }
 rootProject.name = "babybuddy"
