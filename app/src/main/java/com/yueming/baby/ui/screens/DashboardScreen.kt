@@ -69,6 +69,7 @@ import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabySectionHeader
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.babyPageBackground
@@ -194,6 +195,7 @@ fun DashboardScreen(
     val activeUpcomingReminders by remember(reminders, babyInfo.id) {
         derivedStateOf { upcomingReminders(reminders, babyInfo.id, limit = 3) }
     }
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     val ageMonths = remember(babyInfo.birthDate) { DataManager.getAgeInMonths(babyInfo.birthDate) }
     val ageDays = remember(babyInfo.birthDate) { DataManager.getAgeInDays(babyInfo.birthDate) }
@@ -376,7 +378,7 @@ fun DashboardScreen(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize().babyPageBackground(),
-            contentPadding = PaddingValues(start = 20.dp, top = 14.dp, end = 20.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 20.dp, top = 14.dp, end = 20.dp, bottom = bottomBarClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

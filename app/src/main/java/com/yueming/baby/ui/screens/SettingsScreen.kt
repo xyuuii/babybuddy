@@ -43,6 +43,7 @@ import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
@@ -91,10 +92,11 @@ fun SettingsScreen() {
     var showSyncCenter by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().babyPageBackground(),
-        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = bottomBarClearance),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {

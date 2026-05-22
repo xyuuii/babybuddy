@@ -80,6 +80,7 @@ import com.yueming.baby.data.ChatMessage
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.MarkdownText
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
@@ -111,6 +112,7 @@ fun AIScreen() {
 
     var input by remember { mutableStateOf("") }
     var showClearConfirm by remember { mutableStateOf(false) }
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     val ageMonths = remember(babyInfo.birthDate) { DataManager.getAgeInMonths(babyInfo.birthDate) }
     val babyContextSummary = remember(babyInfo, timeline) {
@@ -160,7 +162,11 @@ fun AIScreen() {
             .fillMaxSize()
             .babyPageBackground()
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = bottomBarClearance)
+        ) {
             CompactAssistantHeader(
                 messageCount = messages.count { it.role in setOf("user", "assistant") },
                 onClear = { showClearConfirm = true }

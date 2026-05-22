@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.MotionAnimatedContent
@@ -64,6 +65,7 @@ fun VaccineScreen(onDismiss: () -> Unit) {
     var markDate by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)) }
     var markBatch by remember { mutableStateOf("") }
     var showUndoConfirm by remember { mutableStateOf<VaccineItem?>(null) }
+    val bottomBarClearance = LocalBabyBottomBarClearance.current
 
     val ageMonths = DataManager.getAgeInMonths(babyInfo.birthDate)
     val doneMap = remember(scopedVaccineStatuses) {
@@ -117,7 +119,7 @@ fun VaccineScreen(onDismiss: () -> Unit) {
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = bottomBarClearance),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Age header
