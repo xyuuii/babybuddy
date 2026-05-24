@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -29,18 +30,30 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -48,17 +61,48 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.DataManager
+import com.yueming.baby.ui.components.BabyGlassHost
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.babyFloatingGlassBackdropSource
+import com.yueming.baby.ui.components.liquid.DampedDragAnimation
+import com.yueming.baby.ui.components.liquid.InnerShadow
+import com.yueming.baby.ui.components.liquid.InteractiveHighlight
+import com.yueming.baby.ui.components.liquid.innerShadow
+import com.yueming.baby.ui.components.liquid.lens
+import com.yueming.baby.ui.components.liquid.rememberCombinedBackdrop
+import com.yueming.baby.ui.components.liquid.vibrancy
 import com.yueming.baby.ui.motion.BabyMotion
 import com.yueming.baby.ui.motion.motionPressable
 import com.yueming.baby.ui.screens.*
 import com.yueming.baby.ui.theme.YueMingTheme
 import com.yueming.baby.ui.theme.ThemeMode
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.highlight.LightPosition
+import top.yukonga.miuix.kmp.blur.highlight.LightSource
+import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
 import java.io.StringWriter
 import java.io.PrintWriter
+import kotlin.math.abs
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sign
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,10 +169,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed class Screen(val route: String, val title: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector) {
+sealed class Screen(
+    val route: String,
+    private val fallbackTitle: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+) {
+    val title: String
+        get() = when (route) {
+            "dashboard" -> "首页"
+            "timeline" -> "时间线"
+            "photos" -> "照片墙"
+            "ai" -> "AI"
+            "settings" -> "设置"
+            else -> fallbackTitle
+        }
+
     data object Dashboard : Screen("dashboard", "首页", Icons.Filled.Home, Icons.Outlined.Home)
     data object Timeline  : Screen("timeline", "时间线", Icons.Filled.DateRange, Icons.Outlined.DateRange)
-    data object Photos    : Screen("photos", "照片", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary)
+    data object Photos    : Screen("photos", "照片墙", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary)
     data object AI        : Screen("ai", "AI助手", Icons.Filled.SmartToy, Icons.Outlined.SmartToy)
     data object Settings  : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -149,6 +208,7 @@ private fun screenTransitionDirection(fromRoute: String?, toRoute: String?): Int
 @Composable
 fun YueMingApp() {
     val navController = rememberNavController()
+    val legacyBackdrop = rememberLayerBackdrop()
     val screens = remember {
         listOf(Screen.Dashboard, Screen.Timeline, Screen.Photos, Screen.AI, Screen.Settings)
     }
@@ -167,7 +227,8 @@ fun YueMingApp() {
         LocalBabyBottomBarClearance provides bottomBarClearance,
         LocalBabyStatusBarClearance provides statusBarClearance
     ) {
-        Box(
+        BabyGlassHost(
+            legacyBackdrop = legacyBackdrop,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
@@ -177,7 +238,9 @@ fun YueMingApp() {
                 startDestination = Screen.Dashboard.route,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(MaterialTheme.colorScheme.background)
+                    .babyFloatingGlassBackdropSource()
+                    .layerBackdrop(legacyBackdrop),
                 enterTransition = {
                     val direction = screenTransitionDirection(
                         initialState.destination.route,
@@ -239,6 +302,7 @@ fun YueMingApp() {
             BabyLiquidBottomBar(
                 screens = screens,
                 selectedIndex = selectedIndex,
+                backdrop = legacyBackdrop,
                 onSelect = { screen ->
                     navController.navigate(screen.route) {
                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -252,104 +316,429 @@ fun YueMingApp() {
     }
 }
 
-private val BabyLiquidBottomBarHeight = 68.dp
-private val BabyLiquidBottomBarVerticalPadding = 10.dp
+private val BabyLiquidBottomBarHeight = 62.dp
+private val BabyLiquidBottomBarVerticalPadding = 8.dp
 private val BabyLiquidBottomBarContentGap = 12.dp
+
+private val BabyLiquidIndicatorSpecular: Highlight = Highlight(
+    width = 1.dp,
+    alpha = 1f,
+    style = BloomStroke(
+        color = Color.White.copy(alpha = 0.12f),
+        innerBlurRadius = 2.0.dp,
+        primaryLight = LightSource(
+            position = LightPosition(0.5f, -0.3f, -0.05f),
+            color = Color.White,
+            intensity = 1f
+        ),
+        secondaryLight = LightSource(
+            position = LightPosition(0.5f, 0.8f, -0.5f),
+            color = Color.White,
+            intensity = 0.4f
+        ),
+        dualPeak = true
+    )
+)
+
+private const val BabyLiquidLightRefX = 0.5f
+private const val BabyLiquidLightRefY = 0.7f
+private const val BabyLiquidGravityThresholdSq = 0.01f
+
+@Composable
+private fun rememberGravityRotatedHighlight(
+    base: Highlight,
+    extraDegrees: Float = 0f
+): Highlight {
+    val baseStyle = base.style as BloomStroke
+    val tilt by rememberDeviceTilt()
+    val rotatedPrimary = remember(tilt, baseStyle.primaryLight, extraDegrees) {
+        val basePrimary = baseStyle.primaryLight
+        val gravityX = tilt.gravityX
+        val gravityY = tilt.gravityY
+        val gravityMagnitudeSq = gravityX * gravityX + gravityY * gravityY
+        val (baseLightX, baseLightY) = if (gravityMagnitudeSq > BabyLiquidGravityThresholdSq) {
+            val invMagnitude = 1f / sqrt(gravityMagnitudeSq)
+            gravityX * invMagnitude to gravityY * invMagnitude
+        } else {
+            0f to -1f
+        }
+        val radians = extraDegrees * PI / 180.0
+        val cos = cos(radians).toFloat()
+        val sin = sin(radians).toFloat()
+        val lightX = cos * baseLightX - sin * baseLightY
+        val lightY = sin * baseLightX + cos * baseLightY
+        basePrimary.copy(
+            position = LightPosition(
+                x = BabyLiquidLightRefX + lightX,
+                y = BabyLiquidLightRefY + lightY,
+                z = basePrimary.position.z
+            )
+        )
+    }
+    return remember(base, rotatedPrimary) {
+        base.copy(style = baseStyle.copy(primaryLight = rotatedPrimary))
+    }
+}
 
 @Composable
 private fun BabyLiquidBottomBar(
     screens: List<Screen>,
     selectedIndex: Int,
+    backdrop: LayerBackdrop?,
     onSelect: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = CircleShape
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val glassBase = Brush.linearGradient(
-        colors = if (isDark) {
-            listOf(
-                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
-                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)
-            )
-        } else {
-            listOf(
-                Color.White.copy(alpha = 0.92f),
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f)
+    val pillShape = remember { CircleShape }
+    val accentColor = MaterialTheme.colorScheme.primary
+    val baseContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.80f else 0.66f)
+    val containerColor = if (isDark) {
+        Color(0xFF1C1C1E).copy(alpha = 0.30f)
+    } else {
+        Color.White.copy(alpha = 0.18f)
+    }
+    val isBlurActive = backdrop != null && isRenderEffectSupported()
+    val tabsBackdrop = if (isBlurActive) rememberLayerBackdrop() else null
+    val density = LocalDensity.current
+    val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+    val animationScope = rememberCoroutineScope()
+    val selectedIndexState by rememberUpdatedState(selectedIndex)
+    val screensState by rememberUpdatedState(screens)
+    val onSelectState by rememberUpdatedState(onSelect)
+    val tabsCount = screens.size.coerceAtLeast(1)
+
+    var tabWidthPx by remember { mutableFloatStateOf(0f) }
+    var totalWidthPx by remember { mutableFloatStateOf(0f) }
+    var currentIndex by remember { mutableIntStateOf(selectedIndex) }
+
+    val offsetAnimation = remember { Animatable(0f) }
+    val rubberBandPx = with(density) { 4.dp.toPx() }
+    val panelOffset by remember(rubberBandPx) {
+        derivedStateOf {
+            if (totalWidthPx == 0f) {
+                0f
+            } else {
+                val fraction = (offsetAnimation.value / totalWidthPx).coerceIn(-1f, 1f)
+                rubberBandPx * fraction.sign * EaseOut.transform(abs(fraction))
+            }
+        }
+    }
+
+    class DampedDragHolder {
+        var instance: DampedDragAnimation? = null
+    }
+    val holder = remember { DampedDragHolder() }
+    val dampedDrag = remember(animationScope, tabsCount, density, isLtr) {
+        DampedDragAnimation(
+            animationScope = animationScope,
+            initialValue = selectedIndex.toFloat(),
+            valueRange = 0f..(tabsCount - 1).toFloat(),
+            visibilityThreshold = 0.001f,
+            initialScale = 1f,
+            pressedScale = 78f / 56f,
+            canDrag = { offset ->
+                val anim = holder.instance ?: return@DampedDragAnimation true
+                if (tabWidthPx == 0f) return@DampedDragAnimation false
+                val indicatorX = anim.value * tabWidthPx
+                val paddingPx = with(density) { 4.dp.toPx() }
+                val globalTouchX = if (isLtr) {
+                    paddingPx + indicatorX + offset.x
+                } else {
+                    totalWidthPx - paddingPx - tabWidthPx - indicatorX + offset.x
+                }
+                globalTouchX in 0f..totalWidthPx
+            },
+            onDragStarted = {},
+            onDragStopped = {
+                val targetIndex = targetValue.roundToInt().coerceIn(0, tabsCount - 1)
+                if (currentIndex != targetIndex) {
+                    currentIndex = targetIndex
+                } else {
+                    animateToValue(targetIndex.toFloat())
+                }
+                animationScope.launch {
+                    offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                }
+            },
+            onDrag = { _, dragAmount ->
+                if (tabWidthPx > 0f) {
+                    updateValue(
+                        (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
+                            .coerceIn(0f, (tabsCount - 1).toFloat())
+                    )
+                    animationScope.launch {
+                        offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                    }
+                }
+            }
+        ).also { holder.instance = it }
+    }
+
+    LaunchedEffect(selectedIndex) {
+        if (currentIndex != selectedIndex) currentIndex = selectedIndex
+        dampedDrag.animateToValue(selectedIndex.toFloat())
+    }
+    LaunchedEffect(dampedDrag) {
+        snapshotFlow { currentIndex }.drop(1).collectLatest { index ->
+            dampedDrag.animateToValue(index.toFloat())
+            if (index != selectedIndexState) {
+                screensState.getOrNull(index)?.let(onSelectState)
+            }
+        }
+    }
+
+    val interactiveHighlight = remember(animationScope, isLtr) {
+        InteractiveHighlight(
+            animationScope = animationScope,
+            position = { size, _ ->
+                Offset(
+                    x = if (isLtr) {
+                        (dampedDrag.value + 0.5f) * tabWidthPx + panelOffset
+                    } else {
+                        size.width - (dampedDrag.value + 0.5f) * tabWidthPx + panelOffset
+                    },
+                    y = size.height / 2f
+                )
+            }
+        )
+    }
+    val baseHighlight = rememberGravityRotatedHighlight(BabyLiquidIndicatorSpecular, extraDegrees = -45f)
+    val pillHighlight = rememberGravityRotatedHighlight(BabyLiquidIndicatorSpecular, extraDegrees = 90f)
+    val combinedBackdrop = if (backdrop != null && tabsBackdrop != null) {
+        rememberCombinedBackdrop(backdrop, tabsBackdrop)
+    } else {
+        null
+    }
+
+    val tabsContent: @Composable RowScope.(Color, Boolean) -> Unit = { tint, enabled ->
+        screens.forEachIndexed { index, screen ->
+            YueMingNavigationBarItem(
+                screen = screen,
+                selected = index == selectedIndex,
+                tint = tint,
+                tabScale = { lerp(1f, 1.2f, dampedDrag.pressProgress) },
+                enabled = enabled,
+                onClick = { currentIndex = index }
             )
         }
-    )
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = BabyLiquidBottomBarVerticalPadding),
+            .padding(horizontal = 24.dp, vertical = BabyLiquidBottomBarVerticalPadding),
         contentAlignment = Alignment.Center
     ) {
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .widthIn(max = 430.dp)
-                .height(BabyLiquidBottomBarHeight)
-                .shadow(
-                    elevation = 22.dp,
-                    shape = shape,
-                    clip = false,
-                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.34f else 0.16f),
-                    spotColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.14f)
-                )
-                .clip(shape)
-                .background(glassBase, shape)
-                .liquidGlassChrome(shape = shape, isDark = isDark)
-                .padding(4.dp)
+                .fillMaxWidth(0.90f)
+                .widthIn(max = 402.dp)
+                .height(BabyLiquidBottomBarHeight),
+            contentAlignment = Alignment.CenterStart
         ) {
-            val tabWidth = maxWidth / screens.size
-            val selectedPosition by animateFloatAsState(
-                targetValue = selectedIndex.toFloat(),
-                animationSpec = spring(
-                    dampingRatio = 0.76f,
-                    stiffness = 420f
-                ),
-                label = "liquidBottomBarIndicatorPosition"
-            )
-
-            Box(
-                modifier = Modifier
-                    .offset(x = tabWidth * selectedPosition)
-                    .width(tabWidth)
-                    .fillMaxHeight()
-                    .clip(shape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                BabyPalette.Rose.copy(alpha = if (isDark) 0.34f else 0.24f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.18f else 0.12f),
-                                Color.White.copy(alpha = if (isDark) 0.06f else 0.26f)
-                            )
-                        ),
-                        shape
-                    )
-                    .liquidGlassChrome(
-                        shape = shape,
-                        isDark = isDark,
-                        borderColor = BabyPalette.Rose.copy(alpha = if (isDark) 0.38f else 0.34f),
-                        topHighlightAlpha = if (isDark) 0.16f else 0.36f
-                    )
-            )
-
             Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier
+                    .onSizeChanged { size ->
+                        totalWidthPx = size.width.toFloat()
+                        val contentWidthPx = totalWidthPx - with(density) { 8.dp.toPx() }
+                        tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
+                    }
+                    .graphicsLayer { translationX = panelOffset }
+                    .dropShadow(
+                        shape = pillShape,
+                        shadow = Shadow(
+                            radius = 10.dp,
+                            color = Color.Black,
+                            alpha = if (isDark) 0.18f else 0.10f
+                        )
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
+                    .then(
+                        if (isBlurActive) {
+                            Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { pillShape },
+                                effects = {
+                                    vibrancy()
+                                    blur(4.dp.toPx(), 4.dp.toPx())
+                                    lens(
+                                        refractionHeight = 24.dp.toPx(),
+                                        refractionAmount = 24.dp.toPx()
+                                    )
+                                },
+                                highlight = { baseHighlight.copy(alpha = 0.75f) },
+                                layerBlock = {
+                                    val width = size.width.coerceAtLeast(1f)
+                                    val scale = lerp(1f, 1f + 16.dp.toPx() / width, dampedDrag.pressProgress)
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                                onDrawSurface = { drawRect(containerColor) }
+                            )
+                        } else {
+                            Modifier.background(
+                                if (isDark) Color(0xFF242428).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.58f),
+                                pillShape
+                            )
+                        }
+                    )
+                    .then(interactiveHighlight.modifier)
+                    .height(BabyLiquidBottomBarHeight)
+                    .padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                screens.forEachIndexed { index, screen ->
-                    val selected = index == selectedIndex
-                    YueMingNavigationBarItem(
-                        screen = screen,
-                        selected = selected,
-                        onClick = { onSelect(screen) }
+                tabsContent(baseContentColor, true)
+            }
+
+            if (isBlurActive) {
+                Row(
+                    modifier = Modifier
+                        .clearAndSetSemantics {}
+                        .alpha(0f)
+                        .then(if (tabsBackdrop != null) Modifier.layerBackdrop(tabsBackdrop) else Modifier)
+                        .graphicsLayer { translationX = panelOffset }
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { pillShape },
+                            effects = {
+                                vibrancy()
+                                blur(4.dp.toPx(), 4.dp.toPx())
+                                lens(
+                                    refractionHeight = 24.dp.toPx(),
+                                    refractionAmount = 24.dp.toPx()
+                                )
+                            },
+                            onDrawSurface = { drawRect(containerColor) }
+                        )
+                        .then(interactiveHighlight.modifier)
+                        .height(BabyLiquidBottomBarHeight - 8.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabsContent(accentColor, false)
+                }
+            }
+
+            if (tabWidthPx > 0f) {
+                val tabWidthDp = with(density) { tabWidthPx.toDp() }
+                if (isBlurActive && combinedBackdrop != null) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .graphicsLayer {
+                                val progressOffset = dampedDrag.value * tabWidthPx
+                                translationX = if (isLtr) progressOffset + panelOffset else -progressOffset + panelOffset
+                            }
+                            .then(interactiveHighlight.gestureModifier)
+                            .then(dampedDrag.modifier)
+                            .drawBackdrop(
+                                backdrop = combinedBackdrop,
+                                shape = { pillShape },
+                                effects = {
+                                    val progress = dampedDrag.pressProgress
+                                    lens(
+                                        refractionHeight = 10.dp.toPx() * progress,
+                                        refractionAmount = 14.dp.toPx() * progress,
+                                        depthEffect = true,
+                                        chromaticAberration = 0.5f
+                                    )
+                                },
+                                highlight = { pillHighlight.copy(alpha = dampedDrag.pressProgress) },
+                                layerBlock = {
+                                    scaleX = dampedDrag.scaleX
+                                    scaleY = dampedDrag.scaleY
+                                    val velocity = dampedDrag.velocity / 10f
+                                    scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
+                                    scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
+                                },
+                                onDrawSurface = {
+                                    val progress = dampedDrag.pressProgress
+                                    drawRect(
+                                        color = if (isDark) {
+                                            Color.White.copy(alpha = 0.10f)
+                                        } else {
+                                            Color.Black.copy(alpha = 0.10f)
+                                        },
+                                        alpha = 1f - progress
+                                    )
+                                    drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                                }
+                            )
+                            .innerShadow(shape = pillShape) {
+                                InnerShadow(
+                                    radius = 8.dp * dampedDrag.pressProgress,
+                                    color = Color.Black.copy(alpha = 0.15f),
+                                    alpha = dampedDrag.pressProgress
+                                )
+                            }
+                            .height(BabyLiquidBottomBarHeight - 8.dp)
+                            .width(tabWidthDp)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .graphicsLayer {
+                                val progressOffset = dampedDrag.value * tabWidthPx
+                                translationX = if (isLtr) progressOffset + panelOffset else -progressOffset + panelOffset
+                                scaleX = dampedDrag.scaleX
+                                scaleY = dampedDrag.scaleY
+                                val velocity = dampedDrag.velocity / 10f
+                                scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
+                                scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
+                            }
+                            .then(interactiveHighlight.gestureModifier)
+                            .then(dampedDrag.modifier)
+                            .clip(pillShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.20f else 0.58f),
+                                        accentColor.copy(alpha = if (isDark) 0.20f else 0.14f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(tabWidthPx / 2f, 0f),
+                                    radius = tabWidthPx.coerceAtLeast(1f) * 1.15f
+                                ),
+                                pillShape
+                            )
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.12f else 0.34f),
+                                        Color.White.copy(alpha = if (isDark) 0.04f else 0.12f),
+                                        Color.Black.copy(alpha = if (isDark) 0.16f else 0.04f)
+                                    )
+                                ),
+                                pillShape
+                            )
+                            .border(
+                                BorderStroke(
+                                    0.8.dp,
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.White.copy(alpha = if (isDark) 0.20f else 0.58f),
+                                            Color.White.copy(alpha = if (isDark) 0.08f else 0.22f),
+                                            Color.Black.copy(alpha = if (isDark) 0.14f else 0.03f)
+                                        )
+                                    )
+                                ),
+                                pillShape
+                            )
+                            .innerShadow(shape = pillShape) {
+                                InnerShadow(
+                                    radius = 8.dp * (0.45f + dampedDrag.pressProgress * 0.55f),
+                                    color = Color.Black.copy(alpha = if (isDark) 0.20f else 0.10f),
+                                    alpha = 0.36f + dampedDrag.pressProgress * 0.28f
+                                )
+                            }
+                            .height(BabyLiquidBottomBarHeight - 8.dp)
+                            .width(tabWidthDp)
                     )
                 }
             }
@@ -361,6 +750,9 @@ private fun BabyLiquidBottomBar(
 private fun RowScope.YueMingNavigationBarItem(
     screen: Screen,
     selected: Boolean,
+    tint: Color,
+    tabScale: () -> Float,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -373,11 +765,7 @@ private fun RowScope.YueMingNavigationBarItem(
     )
 
     val itemColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-        },
+        targetValue = tint.copy(alpha = if (selected) 0.98f else tint.alpha),
         animationSpec = BabyMotion.colorFadeSpec(),
         label = "bottomBarItemColor"
     )
@@ -386,29 +774,38 @@ private fun RowScope.YueMingNavigationBarItem(
             .weight(1f)
             .fillMaxHeight()
             .clip(CircleShape)
-            .motionPressable(interactionSource, pressedScale = 0.94f)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {
-                    scope.launch {
-                        tapPulse.snapTo(0.88f)
-                        tapPulse.animateTo(1.14f, tween(durationMillis = 120, easing = FastOutSlowInEasing))
-                        tapPulse.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
-                    }
-                    onClick()
+            .then(
+                if (enabled) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = {
+                            scope.launch {
+                                tapPulse.snapTo(0.90f)
+                                tapPulse.animateTo(1.10f, tween(durationMillis = 120, easing = FastOutSlowInEasing))
+                                tapPulse.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
+                            }
+                            onClick()
+                        }
+                    )
+                } else {
+                    Modifier
                 }
             )
+            .graphicsLayer {
+                val scale = tabScale()
+                scaleX = scale
+                scaleY = scale
+            }
             .padding(horizontal = 1.dp, vertical = 0.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .height(31.dp)
-                .width(42.dp + 8.dp * selectedProgress)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.Transparent),
+                .height(32.dp)
+                .width(46.dp + 2.dp * selectedProgress),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -450,10 +847,20 @@ private fun Modifier.liquidGlassChrome(
             Brush.verticalGradient(
                 listOf(
                     Color.White.copy(alpha = topHighlightAlpha),
-                    Color.White.copy(alpha = if (isDark) 0.04f else 0.10f),
+                    Color.White.copy(alpha = if (isDark) 0.05f else 0.14f),
                     Color.Transparent,
                     Color.Black.copy(alpha = if (isDark) 0.16f else 0.055f)
                 )
+            ),
+            shape
+        )
+        .background(
+            Brush.radialGradient(
+                listOf(
+                    Color.White.copy(alpha = if (isDark) 0.12f else 0.34f),
+                    Color.Transparent
+                ),
+                radius = 480f
             ),
             shape
         )

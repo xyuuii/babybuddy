@@ -1,0 +1,53 @@
+name: Android Release APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing release tag to attach the APK to, for example v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build installable debug APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Prepare APK asset
+        shell: bash
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name || inputs.tag_name }}"
+          cp app/build/outputs/apk/debug/app-debug.apk "babybuddy-${TAG_NAME}-debug.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: babybuddy-debug-apk
+          path: babybuddy-*-debug.apk
+          if-no-files-found: error
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.tag_name }}
+          files: babybuddy-*-debug.apk

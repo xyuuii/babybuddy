@@ -34,6 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,21 @@ import com.yueming.baby.data.cloud.CloudStorageConfig
 import com.yueming.baby.data.cloud.CloudManager
 import com.yueming.baby.data.cloud.StorageProtocol
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyContentCard
+import com.yueming.baby.ui.components.BabyDateWheelDialog
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyGlassModalSheet
+import com.yueming.baby.ui.components.BabyDangerButton
+import com.yueming.baby.ui.components.BabyGlassButton
+import com.yueming.baby.ui.components.BabyGlassIconButton
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassTitle
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
+import com.yueming.baby.ui.components.BabySettingsRow
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
@@ -286,7 +302,7 @@ fun SettingsScreen() {
     }
 
     if (showClearDataConfirm) {
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showClearDataConfirm = false },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFEF5350)) },
             title = { Text("确认清除所有数据？") },
@@ -294,22 +310,19 @@ fun SettingsScreen() {
                 Text("这会清空本机宝宝资料、时间线、媒体索引和配置，并会把远端数据文件同步为空。此操作不可撤销，请先确认 NAS 上已有备份。")
             },
             confirmButton = {
-                TextButton(
+                BabyDangerButton(
+                    text = "确认清除",
                     onClick = {
                         showClearDataConfirm = false
                         DataManager.resetAllData {
                             Toast.makeText(context, "数据已清除", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF5350))
-                ) {
-                    Text("确认清除")
-                }
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                )
             },
             dismissButton = {
-                TextButton(onClick = { showClearDataConfirm = false }) {
-                    Text("取消")
-                }
+                BabySecondaryButton(text = "取消", onClick = { showClearDataConfirm = false })
             }
         )
     }
@@ -448,11 +461,9 @@ private fun MiuixSettingsHeader(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            "设置",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+        BabyGlassTitle(
+            title = "设置",
+            subtitle = statusText
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -560,46 +571,25 @@ private fun SettingsGroupCard(
         label = "settingsGroupBorder"
     )
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.978f)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        shape = RoundedCornerShape(cardCorner),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+    BabySettingsRow(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        onClick = onClick,
+        modifier = modifier,
+        accent = iconTint
     ) {
-        Row(
-            Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.70f)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(iconCorner))
-                    .background(iconTint.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, Modifier.size(24.dp), tint = iconTint)
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(3.dp))
-                Text(subtitle, style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.ChevronRight, null, Modifier.size(19.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f))
-            }
+            Icon(
+                Icons.Default.ChevronRight,
+                null,
+                Modifier.size(19.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+            )
         }
     }
 }
@@ -636,17 +626,17 @@ private fun SyncStatusCard(
         label = "syncStatusCardCorner"
     )
     val containerColor by animateColorAsState(
-        targetValue = accent.copy(alpha = if (pressed) 0.12f else 0.08f),
+        targetValue = MaterialTheme.colorScheme.surface.copy(alpha = if (pressed) 0.96f else 0.985f),
         animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
         label = "syncStatusContainer"
     )
     val borderColor by animateColorAsState(
-        targetValue = accent.copy(alpha = if (pressed) 0.32f else 0.22f),
+        targetValue = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (pressed) 0.34f else 0.22f),
         animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
         label = "syncStatusBorder"
     )
 
-    Card(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .motionCardPress(interactionSource = interactionSource, pressedScale = 0.982f)
@@ -656,9 +646,10 @@ private fun SyncStatusCard(
                 onClick = onDetails
             ),
         shape = RoundedCornerShape(cardCorner),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        color = containerColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(0.7.dp, borderColor)
     ) {
         Column(
             Modifier.padding(18.dp).fillMaxWidth(),
@@ -667,7 +658,7 @@ private fun SyncStatusCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(46.dp).clip(RoundedCornerShape(18.dp))
-                        .background(accent.copy(alpha = 0.15f)),
+                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.86f)),
                     contentAlignment = Alignment.Center
                 ) {
                     MotionAnimatedContent(
@@ -739,7 +730,7 @@ private fun SyncCenterDialog(
         }
     }
 
-    AlertDialog(
+    BabyGlassAlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.Sync, contentDescription = null) },
         title = { Text("同步中心") },
@@ -760,14 +751,15 @@ private fun SyncCenterDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onRetry, enabled = status.isConfigured && !status.isSyncing) {
-                Text("立即重试")
-            }
+            BabyPrimaryButton(
+                text = "立即重试",
+                onClick = onRetry,
+                enabled = status.isConfigured && !status.isSyncing,
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
+            BabySecondaryButton(text = "关闭", onClick = onDismiss)
         }
     )
 }
@@ -791,12 +783,10 @@ private fun MiuixSheetCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
+    BabyGlassSurface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+        shape = RoundedCornerShape(26.dp),
+        role = BabyGlassRole.RegularChrome
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -844,11 +834,9 @@ private fun BabyInfoSheet(
         }
     }
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -858,7 +846,8 @@ private fun BabyInfoSheet(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp),
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("宝宝信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -880,65 +869,54 @@ private fun BabyInfoSheet(
                 }
             }
 
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = form.name, onValueChange = { form = form.copy(name = it) },
-                label = { Text("宝宝名字") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                label = "宝宝名字", modifier = Modifier.fillMaxWidth(), singleLine = true
             )
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = form.nickname, onValueChange = { form = form.copy(nickname = it) },
-                label = { Text("昵称") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                label = "昵称", modifier = Modifier.fillMaxWidth(), singleLine = true
             )
-            OutlinedButton(
+            BabySecondaryButton(
+                text = "出生日期: ${form.birthDate}",
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("出生日期: ${form.birthDate}")
-            }
+                modifier = Modifier.fillMaxWidth()
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("girl" to "女宝宝", "boy" to "男宝宝").forEach { (g, label) ->
-                    FilterChip(
+                    BabyGlassChip(
+                        label = label,
                         selected = form.gender == g,
                         onClick = { form = form.copy(gender = g) },
-                        label = { Text(label) },
                         modifier = Modifier.weight(1f),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFF8C8D8)
-                        )
+                        accent = Color(0xFFEC407A)
                     )
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                BabyPrimaryButton(
+                    text = "保存",
                     onClick = {
                         if (form.name.isNotBlank() && form.nickname.isNotBlank()) onSave(form)
                     },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                    shape = RoundedCornerShape(16.dp)
-                ) { Text("保存", color = Color.White) }
-                OutlinedButton(
+                    modifier = Modifier.weight(1f)
+                )
+                BabySecondaryButton(
+                    text = "添加宝宝",
                     onClick = {
                         onDismiss()
                         onAddBaby()
                     },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
-                ) { Text("添加宝宝") }
+                    modifier = Modifier.weight(1f)
+                )
             }
             if (babies.size > 1) {
-                OutlinedButton(
+                BabySecondaryButton(
+                    text = "删除信息",
                     onClick = { showDeleteConfirm = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
-                ) {
-                    Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("删除信息", color = Color(0xFFEF5350))
-                }
+                    leadingIcon = Icons.Default.Delete
+                )
             }
         }
     }
@@ -957,20 +935,21 @@ private fun BabyInfoSheet(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("确认删除", fontWeight = FontWeight.Bold) },
             text = { Text("确定要删除「${babyInfo.nickname}」吗？该宝宝的所有记录和照片也将被删除。此操作不可撤销。") },
             confirmButton = {
-                Button(
+                BabyDangerButton(
+                    text = "删除",
                     onClick = {
                         showDeleteConfirm = false
                         onDelete(babyInfo.id)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
-                ) { Text("删除", color = Color.White) }
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                )
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+            dismissButton = { BabySecondaryButton(text = "取消", onClick = { showDeleteConfirm = false }) }
         )
     }
 }
@@ -990,10 +969,9 @@ private fun AddBabySheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1003,31 +981,37 @@ private fun AddBabySheet(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp),
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("添加宝宝", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = name, onValueChange = { name = it },
-                label = { Text("宝宝名字") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                label = "宝宝名字", modifier = Modifier.fillMaxWidth(), singleLine = true
             )
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = nickname, onValueChange = { nickname = it },
-                label = { Text("昵称") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                label = "昵称", modifier = Modifier.fillMaxWidth(), singleLine = true
             )
-            OutlinedButton(
+            BabySecondaryButton(
+                text = "出生日期: $birthDate",
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
-            ) { Text("出生日期: $birthDate") }
+                modifier = Modifier.fillMaxWidth()
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("girl" to "女宝宝", "boy" to "男宝宝").forEach { (g, label) ->
-                    FilterChip(selected = gender == g, onClick = { gender = g },
-                        label = { Text(label) }, modifier = Modifier.weight(1f))
+                    BabyGlassChip(
+                        label = label,
+                        selected = gender == g,
+                        onClick = { gender = g },
+                        modifier = Modifier.weight(1f),
+                        accent = Color(0xFFEC407A)
+                    )
                 }
             }
-            Button(
+            BabyPrimaryButton(
+                text = "添加",
                 onClick = {
                     if (name.isNotBlank() && nickname.isNotBlank()) {
                         onAdd(BabyInfo(
@@ -1036,10 +1020,8 @@ private fun AddBabySheet(
                         ))
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                shape = RoundedCornerShape(16.dp)
-            ) { Text("添加", color = Color.White) }
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 
@@ -1075,11 +1057,9 @@ private fun AIConfigSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1088,7 +1068,8 @@ private fun AIConfigSheet(
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 24.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 40.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1105,30 +1086,25 @@ private fun AIConfigSheet(
 
             // --- Top Area: Profile List (LazyRow) ---
             if (displayProfiles.isEmpty() && !showAddForm) {
-                Card(
+                BabyGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    shape = RoundedCornerShape(24.dp),
+                    role = BabyGlassRole.RegularChrome
                 ) {
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("尚未配置 AI 配置文件",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
-                        Button(
+                        BabyPrimaryButton(
+                            text = "添加配置",
                             onClick = {
                                 showAddForm = true
                                 isEditing = true
                                 selectedProfileId = null
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("添加配置", color = Color.White)
-                        }
+                            leadingIcon = Icons.Default.Add
+                        )
                     }
                 }
             } else if (!isEditing) {
@@ -1138,36 +1114,27 @@ private fun AIConfigSheet(
                     items(displayProfiles.size) { index ->
                         val profile = displayProfiles[index]
                         val isSelected = profile.id == selectedProfileId
-                        FilterChip(
+                        BabyGlassChip(
+                            label = if (profile.isActive) "${profile.name} · 活跃" else profile.name,
                             selected = isSelected,
                             onClick = {
                                 selectedProfileId = profile.id
                                 showAddForm = false
                             },
-                            label = {
-                                Text(
-                                    profile.name,
-                                    fontSize = 12.sp,
-                                    maxLines = 1
-                                )
-                            },
-                            leadingIcon = if (profile.isActive) {
-                                { Icon(Icons.Default.CheckCircle, null, Modifier.size(14.dp), tint = Color(0xFF4CAF50)) }
-                            } else null
+                            icon = if (profile.isActive) Icons.Default.CheckCircle else null,
+                            accent = MaterialTheme.colorScheme.primary
                         )
                     }
                     item {
-                        FilterChip(
+                        BabyGlassChip(
+                            label = "+ 添加",
                             selected = showAddForm,
                             onClick = {
                                 selectedProfileId = null
                                 showAddForm = true
                                 isEditing = true
                             },
-                            label = { Text("+ 添加", fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF7C4DFF).copy(alpha = 0.15f)
-                            )
+                            accent = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -1204,13 +1171,10 @@ private fun AIConfigSheet(
                 }
             } else if (selectedProfile != null) {
                 // Show selected profile info with action buttons
-                Card(
+                BabyGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (selectedProfile.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceContainer
-                    )
+                    shape = RoundedCornerShape(24.dp),
+                    role = BabyGlassRole.RegularChrome
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Row(
@@ -1227,10 +1191,10 @@ private fun AIConfigSheet(
                                         Spacer(Modifier.width(6.dp))
                                         Box(
                                             Modifier.clip(RoundedCornerShape(6.dp))
-                                                .background(MaterialTheme.colorScheme.primary)
+                                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
-                                            Text("活跃", fontSize = 10.sp, color = Color.White)
+                                            Text("活跃", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                 }
@@ -1247,26 +1211,22 @@ private fun AIConfigSheet(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (!selectedProfile.isActive) {
-                                OutlinedButton(
+                                BabySecondaryButton(
+                                    text = "启用",
                                     onClick = { onSetActive(selectedProfile.id) },
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) { Text("启用", fontSize = 11.sp) }
+                                    modifier = Modifier.height(42.dp)
+                                )
                             }
-                            OutlinedButton(
+                            BabySecondaryButton(
+                                text = "编辑",
                                 onClick = { isEditing = true },
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) { Text("编辑", fontSize = 11.sp) }
-                            OutlinedButton(
+                                modifier = Modifier.height(42.dp)
+                            )
+                            BabyDangerButton(
+                                text = "删除",
                                 onClick = { showDeleteConfirm = selectedProfile.id },
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350))
-                            ) { Text("删除", fontSize = 11.sp) }
+                                modifier = Modifier.height(42.dp)
+                            )
                         }
                     }
                 }
@@ -1277,20 +1237,20 @@ private fun AIConfigSheet(
     // Delete confirmation
     showDeleteConfirm?.let { profileId ->
         val profile = profiles.find { it.id == profileId }
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text("确认删除", fontWeight = FontWeight.Bold) },
             text = { Text("确定要删除配置「${profile?.name ?: ""}」吗？") },
             confirmButton = {
-                Button(
+                BabyDangerButton(
+                    text = "删除",
                     onClick = {
                         onDeleteProfile(profileId)
                         showDeleteConfirm = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
-                ) { Text("删除", color = Color.White) }
+                    }
+                )
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = null }) { Text("取消") } }
+            dismissButton = { BabySecondaryButton(text = "取消", onClick = { showDeleteConfirm = null }) }
         )
     }
 }
@@ -1321,45 +1281,37 @@ private fun AIProfileEditFormRedesigned(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold
             )
-            TextButton(onClick = onCancel) { Text("返回") }
+            BabySecondaryButton(
+                text = "返回",
+                onClick = onCancel
+            )
         }
 
         // Card Group 1: Basic Info (Name / URL / Key)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
+        BabyContentCard(shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("基本信息", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary)
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = form.name, onValueChange = { form = form.copy(name = it) },
-                    label = { Text("配置名称") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "配置名称",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = form.apiBaseUrl, onValueChange = { form = form.copy(apiBaseUrl = it) },
-                    label = { Text("API Base URL") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "API Base URL",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = form.apiKey, onValueChange = { form = form.copy(apiKey = it) },
-                    label = { Text("API Key") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "API Key",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
             }
         }
 
         // Card Group 2: Model Params (Model / Temperature / Tokens)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
+        BabyContentCard(shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("模型参数", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary)
@@ -1370,7 +1322,13 @@ private fun AIProfileEditFormRedesigned(
                         Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { form = form.copy(model = model.id, apiBaseUrl = model.apiBase) }
-                            .background(if (form.model == model.id) Color(0xFFEC407A).copy(alpha = 0.1f) else Color.Transparent)
+                            .background(
+                                if (form.model == model.id) {
+                                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.76f)
+                                } else {
+                                    Color.Transparent
+                                }
+                            )
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -1380,7 +1338,7 @@ private fun AIProfileEditFormRedesigned(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (form.model == model.id) {
-                            Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = Color(0xFFEC407A))
+                            Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -1402,35 +1360,29 @@ private fun AIProfileEditFormRedesigned(
                 ) {
                     Text("最大 Token 数: ${form.maxTokens}",
                         style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    OutlinedButton(
+                    BabySecondaryButton(
+                        text = "切换",
                         onClick = {
                             val options = listOf(512, 1024, 2048, 4096, 8192)
                             val idx = options.indexOf(form.maxTokens)
                             val nextIdx = (idx + 1) % options.size
                             form = form.copy(maxTokens = options[nextIdx])
                         },
-                        modifier = Modifier.height(28.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) { Text("切换", fontSize = 11.sp) }
+                        modifier = Modifier.height(36.dp)
+                    )
                 }
             }
         }
 
         // Card Group 3: Advanced (System Prompt)
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
+        BabyContentCard(shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("高级设置", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary)
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = form.systemPrompt, onValueChange = { form = form.copy(systemPrompt = it) },
-                    label = { Text("系统提示词") },
-                    modifier = Modifier.fillMaxWidth(), minLines = 2,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "系统提示词",
+                    modifier = Modifier.fillMaxWidth(), minLines = 2
                 )
             }
         }
@@ -1441,7 +1393,8 @@ private fun AIProfileEditFormRedesigned(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
+            BabySecondaryButton(
+                text = if (isTesting) "测试中" else "测试连接",
                 onClick = {
                     if (form.apiBaseUrl.isNotBlank()) {
                         isTesting = true
@@ -1457,22 +1410,17 @@ private fun AIProfileEditFormRedesigned(
                 },
                 modifier = Modifier.weight(1f),
                 enabled = !isTesting && form.apiBaseUrl.isNotBlank(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
-                Text("测试连接", fontSize = 13.sp)
-            }
-            Button(
+                leadingIcon = Icons.Default.NetworkCheck
+            )
+            BabyPrimaryButton(
+                text = "保存",
                 onClick = {
                     if (form.name.isNotBlank() && form.apiBaseUrl.isNotBlank()) {
                         onSave(form)
                     }
                 },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("保存", color = Color.White) }
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -1487,10 +1435,9 @@ private fun ThemeSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1500,8 +1447,9 @@ private fun ThemeSheet(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text("选择主题", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             listOf(
@@ -1509,23 +1457,19 @@ private fun ThemeSheet(
                 Triple(ThemeMode.DARK, "暗色", Icons.Default.Star),
                 Triple(ThemeMode.SYSTEM, "跟随系统", Icons.Default.BrightnessAuto)
             ).forEach { (mode, label, icon) ->
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onSelect(mode) }
-                        .background(if (currentMode == mode) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(icon, null, Modifier.size(22.dp),
-                        tint = if (currentMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(14.dp))
-                    Text(label, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.weight(1f))
-                    if (currentMode == mode) {
-                        Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                val selected = currentMode == mode
+                BabySettingsRow(
+                    icon = icon,
+                    title = label,
+                    subtitle = if (selected) "当前使用" else "点击切换",
+                    onClick = { onSelect(mode) },
+                    accent = MaterialTheme.colorScheme.primary,
+                    trailing = {
+                        if (selected) {
+                            Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
-                }
+                )
             }
         }
     }
@@ -1553,10 +1497,9 @@ private fun CategorySheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1565,48 +1508,71 @@ private fun CategorySheet(
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("分类管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
             categories.forEach { cat ->
                 val isExpanded = expandedCategoryId == cat.id
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { expandedCategoryId = if (isExpanded) null else cat.id },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                BabyContentCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp)
                 ) {
                     Column {
                         Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(22.dp))
+                                .clickable { expandedCategoryId = if (isExpanded) null else cat.id }
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Box(Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)).background(Color(cat.color)))
                                 Spacer(Modifier.width(10.dp))
-                                Text(cat.label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                                if (cat.children.isNotEmpty()) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("(${cat.children.size})", style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        cat.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (cat.children.isNotEmpty()) {
+                                        Text(
+                                            "${cat.children.size} 个子分类",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f)
+                                        )
+                                    }
                                 }
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.widthIn(min = 56.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 if (cat.isDefault) {
                                     Icon(Icons.Default.Lock, null, Modifier.size(14.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                                 } else {
-                                    IconButton(onClick = { onRemove(cat.id) }, modifier = Modifier.size(28.dp)) {
-                                        Icon(Icons.Default.Close, null, Modifier.size(16.dp), tint = Color(0xFFEF5350))
-                                    }
+                                    BabyGlassIconButton(
+                                        icon = Icons.Default.Close,
+                                        onClick = { onRemove(cat.id) },
+                                        modifier = Modifier.size(36.dp),
+                                        accent = MaterialTheme.colorScheme.error
+                                    )
                                 }
+                                Spacer(Modifier.width(6.dp))
                                 Icon(
                                     if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    null, Modifier.size(18.dp),
+                                    null, Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                 )
                             }
@@ -1617,80 +1583,100 @@ private fun CategorySheet(
                             enter = expandVertically() + fadeIn(),
                             exit = shrinkVertically() + fadeOut()
                         ) {
-                            Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+                            Column(
+                                Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
                                 HorizontalDivider()
-                                Spacer(Modifier.height(6.dp))
 
                                 cat.children.forEach { sub ->
                                     Row(
-                                        Modifier.fillMaxWidth().padding(vertical = 4.dp, horizontal = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.58f))
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Icon(Icons.Default.SubdirectoryArrowRight, null, Modifier.size(14.dp),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                                             Spacer(Modifier.width(6.dp))
-                                            Text(sub.name, style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                sub.name,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
-                                        TextButton(
+                                        Spacer(Modifier.width(8.dp))
+                                        BabySecondaryButton(
+                                            text = "编辑",
                                             onClick = {
                                                 editingSub = cat.id to sub
                                                 editSubName = sub.name
                                             },
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                        ) {
-                                            Icon(Icons.Default.Edit, null, Modifier.size(14.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("编辑", fontSize = 11.sp)
-                                        }
+                                            modifier = Modifier.height(40.dp),
+                                            leadingIcon = Icons.Default.Edit
+                                        )
                                     }
                                 }
 
                                 if (cat.children.isEmpty()) {
-                                    Text("暂无子分类",
+                                    Text(
+                                        "暂无子分类",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.46f))
+                                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                                    )
                                 }
 
-                                Spacer(Modifier.height(4.dp))
-
                                 if (showAddSub == cat.id) {
-                                    Row(
+                                    Column(
                                         Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        OutlinedTextField(
+                                        BabyGlassTextField(
                                             value = newSubName, onValueChange = { newSubName = it },
-                                            placeholder = { Text("子分类名称") },
-                                            modifier = Modifier.weight(1f), singleLine = true,
-                                            shape = RoundedCornerShape(8.dp),
-                                            textStyle = MaterialTheme.typography.bodySmall
+                                            placeholder = "子分类名称",
+                                            modifier = Modifier.fillMaxWidth(), singleLine = true,
                                         )
-                                        TextButton(onClick = {
-                                            if (newSubName.isNotBlank()) {
-                                                DataManager.addSubCategory(cat.id, newSubName.trim())
-                                                newSubName = ""
-                                                showAddSub = null
-                                            }
-                                        }) { Text("添加", fontSize = 12.sp) }
-                                        TextButton(onClick = { showAddSub = null; newSubName = "" }) {
-                                            Text("取消", fontSize = 12.sp)
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            BabyPrimaryButton(
+                                                text = "添加",
+                                                onClick = {
+                                                    if (newSubName.isNotBlank()) {
+                                                        DataManager.addSubCategory(cat.id, newSubName.trim())
+                                                        newSubName = ""
+                                                        showAddSub = null
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            BabySecondaryButton(
+                                                text = "取消",
+                                                onClick = { showAddSub = null; newSubName = "" },
+                                                modifier = Modifier.weight(1f)
+                                            )
                                         }
                                     }
                                 } else {
-                                    TextButton(
+                                    BabySecondaryButton(
+                                        text = "添加子分类",
                                         onClick = { showAddSub = cat.id },
                                         modifier = Modifier.fillMaxWidth(),
-                                        contentPadding = PaddingValues(4.dp)
-                                    ) {
-                                        Icon(Icons.Default.Add, null, Modifier.size(14.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("添加子分类", fontSize = 12.sp)
-                                    }
+                                        leadingIcon = Icons.Default.Add
+                                    )
                                 }
                             }
                         }
@@ -1699,64 +1685,78 @@ private fun CategorySheet(
             }
 
             if (showAdd) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = newLabel, onValueChange = { newLabel = it },
-                    label = { Text("分类名称") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    presetColors.forEach { c ->
-                        Box(
-                            Modifier.size(30.dp).clip(RoundedCornerShape(15.dp))
-                                .background(Color(c))
-                                .clickable { newColor = c }
+                BabyContentCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        BabyGlassTextField(
+                            value = newLabel, onValueChange = { newLabel = it },
+                            label = "分类名称", modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            presetColors.forEach { c ->
+                                Box(
+                                    Modifier
+                                        .size(if (newColor == c) 34.dp else 30.dp)
+                                        .clip(RoundedCornerShape(17.dp))
+                                        .background(Color(c))
+                                        .clickable { newColor = c },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (newColor == c) {
+                                        Icon(Icons.Default.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                                    }
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BabyPrimaryButton(
+                                text = "添加",
+                                onClick = {
+                                    if (newLabel.isNotBlank()) {
+                                        onAdd(CategoryConfig(
+                                            id = "custom-${System.currentTimeMillis()}",
+                                            label = newLabel.trim(), icon = "Tag",
+                                            color = newColor, isDefault = false
+                                        ))
+                                        newLabel = ""; showAdd = false
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            BabySecondaryButton(text = "取消", onClick = { showAdd = false }, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            if (newLabel.isNotBlank()) {
-                                onAdd(CategoryConfig(
-                                    id = "custom-${System.currentTimeMillis()}",
-                                    label = newLabel.trim(), icon = "Tag",
-                                    color = newColor, isDefault = false
-                                ))
-                                newLabel = ""; showAdd = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
-                    ) { Text("添加", color = Color.White) }
-                    OutlinedButton(onClick = { showAdd = false }, modifier = Modifier.weight(1f)) { Text("取消") }
-                }
             } else {
-                OutlinedButton(
+                BabySecondaryButton(
+                    text = "添加自定义分类",
                     onClick = { showAdd = true },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Icon(Icons.Default.Add, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text("添加自定义分类") }
+                    leadingIcon = Icons.Default.Add
+                )
             }
         }
     }
 
     // Edit sub-category dialog
     editingSub?.let { (catId, sub) ->
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { editingSub = null },
             title = { Text("编辑子分类", fontWeight = FontWeight.Bold) },
             text = {
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = editSubName, onValueChange = { editSubName = it },
-                    label = { Text("名称") }, singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "名称", singleLine = true
                 )
             },
             confirmButton = {
-                Button(
+                BabyPrimaryButton(
+                    text = "保存",
                     onClick = {
                         if (editSubName.isNotBlank()) {
                             DataManager.updateCategory(catId) {
@@ -1767,11 +1767,10 @@ private fun CategorySheet(
                             }
                             editingSub = null
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
-                ) { Text("保存", color = Color.White) }
+                    }
+                )
             },
-            dismissButton = { TextButton(onClick = { editingSub = null }) { Text("取消") } }
+            dismissButton = { BabySecondaryButton(text = "取消", onClick = { editingSub = null }) }
         )
     }
 }@OptIn(ExperimentalMaterial3Api::class)
@@ -1794,11 +1793,9 @@ private fun WebDavConfigSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1807,7 +1804,8 @@ private fun WebDavConfigSheet(
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1822,38 +1820,36 @@ private fun WebDavConfigSheet(
                 }
             }
 
-            OutlinedTextField(
-                value = url, onValueChange = { url = it },
-                label = { Text("服务器地址") },
-                placeholder = { Text("https://dav.example.com") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-            OutlinedTextField(
-                value = username, onValueChange = { username = it },
-                label = { Text("用户名") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-            OutlinedTextField(
-                value = password, onValueChange = { password = it },
-                label = { Text("密码") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { showPassword = !showPassword }) {
-                        Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+            MiuixSheetCard(title = "连接信息") {
+                BabyGlassTextField(
+                    value = url, onValueChange = { url = it },
+                    label = "服务器地址",
+                    placeholder = "https://dav.example.com",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                BabyGlassTextField(
+                    value = username, onValueChange = { username = it },
+                    label = "用户名",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                BabyGlassTextField(
+                    value = password, onValueChange = { password = it },
+                    label = "密码",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        }
                     }
-                }
-            )
-            OutlinedTextField(
-                value = dataPath, onValueChange = { dataPath = it },
-                label = { Text("数据路径") },
-                placeholder = { Text("/babybuddy/data") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
+                )
+                BabyGlassTextField(
+                    value = dataPath, onValueChange = { dataPath = it },
+                    label = "数据路径",
+                    placeholder = "/babybuddy/data",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+            }
 
             testResult?.let {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1879,7 +1875,8 @@ private fun WebDavConfigSheet(
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+                BabySecondaryButton(
+                    text = if (isTesting) "测试中" else "测试连接",
                     onClick = {
                         if (url.isNotBlank()) {
                             isTesting = true
@@ -1899,28 +1896,25 @@ private fun WebDavConfigSheet(
                     },
                     modifier = Modifier.weight(1f),
                     enabled = !isTesting,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    if (isTesting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    else { Icon(Icons.Default.NetworkCheck, null, Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
-                    Text("测试连接", fontSize = 13.sp)
-                }
-                Button(
+                    leadingIcon = Icons.Default.NetworkCheck
+                )
+                BabyPrimaryButton(
+                    text = "保存",
                     onClick = {
                         if (url.isNotBlank()) {
                             onSave(WebDavManager.WebDavConfig(url.trim(), username, password, dataPath.trim()))
                             onDismiss()
                         }
                     },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF66BB6A)),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("保存", color = Color.White) }
+                    modifier = Modifier.weight(1f)
+                )
             }
             if (currentConfig != null) {
-                TextButton(onClick = { onClear(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("清除 WebDAV 配置", color = Color(0xFFEF5350), fontSize = 13.sp)
-                }
+                BabyDangerButton(
+                    text = "清除 WebDAV 配置",
+                    onClick = { onClear(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -1950,11 +1944,9 @@ private fun CloudStorageConfigSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val maxSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.86f
 
-    ModalBottomSheet(
+    BabyGlassModalSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.background,
+        sheetState = sheetState
     ) {
         Column(
             modifier = Modifier
@@ -1963,7 +1955,8 @@ private fun CloudStorageConfigSheet(
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 40.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 56.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -1997,30 +1990,12 @@ private fun CloudStorageConfigSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     StorageProtocol.entries.forEach { proto ->
-                        FilterChip(
+                        BabyGlassChip(
+                            label = proto.name,
                             selected = protocol == proto,
                             onClick = { protocol = proto },
-                            label = {
-                                Text(
-                                    proto.name,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(50),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = protocol == proto,
-                                borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f),
-                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                            ),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                selectedLabelColor = MaterialTheme.colorScheme.primary
-                            )
+                            accent = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -2028,30 +2003,26 @@ private fun CloudStorageConfigSheet(
 
             MiuixSheetCard(title = "连接信息") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = host, onValueChange = { host = it },
-                        label = { Text("主机") },
-                        modifier = Modifier.weight(2f), singleLine = true,
-                        shape = RoundedCornerShape(18.dp)
+                        label = "主机",
+                        modifier = Modifier.weight(2f), singleLine = true
                     )
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = port, onValueChange = { port = it.filter { c -> c.isDigit() } },
-                        label = { Text("端口") },
-                        modifier = Modifier.weight(1f), singleLine = true,
-                        shape = RoundedCornerShape(18.dp)
+                        label = "端口",
+                        modifier = Modifier.weight(1f), singleLine = true
                     )
                 }
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = username, onValueChange = { username = it },
-                    label = { Text("用户名") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(18.dp)
+                    label = "用户名",
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = password, onValueChange = { password = it },
-                    label = { Text("密码") },
+                    label = "密码",
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
@@ -2064,37 +2035,33 @@ private fun CloudStorageConfigSheet(
             when (protocol) {
                 StorageProtocol.WEBDAV -> {
                     MiuixSheetCard(title = "WebDAV 路径") {
-                        OutlinedTextField(
+                        BabyGlassTextField(
                             value = webdavPath, onValueChange = { webdavPath = it },
-                            label = { Text("存储路径") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            shape = RoundedCornerShape(18.dp)
+                            label = "存储路径",
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
                     }
                 }
                 StorageProtocol.SMB -> {
                     MiuixSheetCard(title = "SMB 共享") {
-                        OutlinedTextField(
+                        BabyGlassTextField(
                             value = smbShare, onValueChange = { smbShare = it },
-                            label = { Text("共享名") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            shape = RoundedCornerShape(18.dp)
+                            label = "共享名",
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
-                        OutlinedTextField(
+                        BabyGlassTextField(
                             value = smbDomain, onValueChange = { smbDomain = it },
-                            label = { Text("域名（可选）") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            shape = RoundedCornerShape(18.dp)
+                            label = "域名（可选）",
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
                     }
                 }
                 StorageProtocol.FTP -> {
                     MiuixSheetCard(title = "FTP 路径") {
-                        OutlinedTextField(
+                        BabyGlassTextField(
                             value = ftpPath, onValueChange = { ftpPath = it },
-                            label = { Text("远程路径") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            shape = RoundedCornerShape(18.dp)
+                            label = "远程路径",
+                            modifier = Modifier.fillMaxWidth(), singleLine = true
                         )
                     }
                 }
@@ -2126,7 +2093,8 @@ private fun CloudStorageConfigSheet(
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
+                BabySecondaryButton(
+                    text = if (isTesting) "测试中" else "测试连接",
                     onClick = {
                         if (host.isNotBlank()) {
                             isTesting = true
@@ -2150,20 +2118,12 @@ private fun CloudStorageConfigSheet(
                             }
                         }
                     },
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = Modifier.weight(1f),
                     enabled = !isTesting,
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                ) {
-                    if (isTesting) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.NetworkCheck, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text("测试连接", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
+                    leadingIcon = Icons.Default.NetworkCheck
+                )
+                BabyPrimaryButton(
+                    text = "保存",
                     onClick = {
                         if (host.isNotBlank()) {
                             onSave(CloudStorageConfig(
@@ -2176,10 +2136,8 @@ private fun CloudStorageConfigSheet(
                             onDismiss()
                         }
                     },
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(20.dp)
-                ) { Text("保存", color = Color.White, fontWeight = FontWeight.Bold) }
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -2192,23 +2150,9 @@ private fun SettingsDatePicker(
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDate.toEpochDay() * 86400000L
+    BabyDateWheelDialog(
+        initialDate = initialDate,
+        onDateSelected = onDateSelected,
+        onDismiss = onDismiss
     )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { millis ->
-                    onDateSelected(
-                        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-                    )
-                }
-                onDismiss()
-            }) { Text("确定") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    ) {
-        DatePicker(state = datePickerState)
-    }
 }

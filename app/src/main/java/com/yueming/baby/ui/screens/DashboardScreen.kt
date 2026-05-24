@@ -67,8 +67,24 @@ import com.yueming.baby.BabySwitcher
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyContentCard
+import com.yueming.baby.ui.components.BabyDateWheelDialog
+import com.yueming.baby.ui.components.BabyDynamicContentCard
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyGlassButton
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSheetSurface
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassTitle
+import com.yueming.baby.ui.components.BabyGlassIconButton
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
 import com.yueming.baby.ui.components.BabySectionHeader
+import com.yueming.baby.ui.components.BabySoftCard
+import com.yueming.baby.ui.components.BabySwitch
+import com.yueming.baby.ui.components.BabyTimeWheelDialog
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.VideoPlayer
@@ -370,11 +386,11 @@ fun DashboardScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(20.dp))
-                Button(
+                BabyPrimaryButton(
+                    text = "添加宝宝",
                     onClick = { showAddBaby = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = BabyPalette.Rose),
-                    shape = RoundedCornerShape(16.dp)
-                ) { Text("添加宝宝", color = Color.White) }
+                    modifier = Modifier.widthIn(min = 132.dp)
+                )
             }
         }
     } else {
@@ -629,17 +645,15 @@ private fun DashboardTodaySummary(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "$greeting，${babyInfo.nickname.ifBlank { "宝宝" }}的家长",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            BabyGlassTitle(
+                title = "$greeting，${babyInfo.nickname.ifBlank { "宝宝" }}的家长",
+                modifier = Modifier.fillMaxWidth()
+            )
             BabySwitcher(
                 babies = babies,
                 activeBaby = babyInfo,
@@ -648,12 +662,11 @@ private fun DashboardTodaySummary(
             )
         }
 
-        Card(
+        BabyDynamicContentCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(0.6.dp, BabyPalette.Rose.copy(alpha = 0.16f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+            accent = BabyPalette.Rose,
+            cornerRadius = 28.dp,
+            onClick = onAvatarClick
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -664,7 +677,7 @@ private fun DashboardTodaySummary(
                         modifier = Modifier
                             .size(58.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(BabyPalette.Rose.copy(alpha = 0.13f))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
                             .clickable(onClick = onAvatarClick),
                         contentAlignment = Alignment.Center
                     ) {
@@ -727,7 +740,7 @@ private fun DashboardCareStat(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.58f))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f))
             .padding(horizontal = 10.dp, vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -747,12 +760,10 @@ private fun DashboardQuickActions(
     onVaccine: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    BabyDynamicContentCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+        accent = BabyPalette.Rose,
+        cornerRadius = 26.dp
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1290,12 +1301,10 @@ private fun ReminderDashboardPanel(
     modifier: Modifier = Modifier
 ) {
     val accent = Color(0xFF26A69A)
-    Card(
+    BabyDynamicContentCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.24f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+        accent = accent,
+        cornerRadius = 32.dp
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -1323,15 +1332,14 @@ private fun ReminderDashboardPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(
+                BabyGlassIconButton(
+                    icon = Icons.Default.Add,
                     onClick = onAdd,
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(accent.copy(alpha = 0.12f))
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "添加提醒", tint = accent)
-                }
+                        .size(42.dp),
+                    contentDescription = "添加提醒",
+                    accent = accent
+                )
             }
 
             if (reminders.isEmpty()) {
@@ -1528,24 +1536,32 @@ private fun ReminderEditorDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Card(
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 620.dp),
-            shape = RoundedCornerShape(28.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.16f))
+                .systemBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 18.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+            BabyGlassSheetSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 620.dp),
+                shape = RoundedCornerShape(30.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     Icon(Icons.AutoMirrored.Filled.EventNote, null, Modifier.size(24.dp), tint = Color(0xFF26A69A))
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -1565,58 +1581,62 @@ private fun ReminderEditorDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("事项") },
-                    placeholder = { Text("例如：复查血常规") },
+                    label = "事项",
+                    placeholder = "例如：复查血常规",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(REMINDER_CATEGORIES, key = { it.id }) { item ->
-                        FilterChip(
+                        BabyGlassChip(
+                            label = item.label,
                             selected = category == item.id,
                             onClick = { category = item.id },
-                            label = { Text(item.label) },
-                            leadingIcon = {
-                                Icon(reminderCategoryIcon(item.id), null, Modifier.size(16.dp))
-                            }
+                            icon = reminderCategoryIcon(item.id),
+                            accent = Color(0xFF26A69A)
                         )
                     }
                 }
 
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        AssistChip(
+                        BabyGlassChip(
+                            label = "今天",
+                            selected = dueDate == LocalDate.now(),
                             onClick = {
                                 dueDate = LocalDate.now()
                                 timeText = "09:00"
                             },
-                            label = { Text("今天") },
-                            leadingIcon = { Icon(Icons.Default.Today, null, Modifier.size(16.dp)) }
+                            icon = Icons.Default.Today,
+                            accent = Color(0xFF26A69A)
                         )
                     }
                     item {
-                        AssistChip(
+                        BabyGlassChip(
+                            label = "明天",
+                            selected = dueDate == LocalDate.now().plusDays(1),
                             onClick = {
                                 dueDate = LocalDate.now().plusDays(1)
                                 timeText = "09:00"
                             },
-                            label = { Text("明天") },
-                            leadingIcon = { Icon(Icons.Default.WbSunny, null, Modifier.size(16.dp)) }
+                            icon = Icons.Default.WbSunny,
+                            accent = BabyPalette.Gold
                         )
                     }
                     item {
-                        AssistChip(
+                        BabyGlassChip(
+                            label = "2周后",
+                            selected = dueDate == LocalDate.now().plusDays(14),
                             onClick = {
                                 dueDate = LocalDate.now().plusDays(14)
                                 timeText = "09:00"
                             },
-                            label = { Text("2周后") },
-                            leadingIcon = { Icon(Icons.Default.EventRepeat, null, Modifier.size(16.dp)) }
+                            icon = Icons.Default.EventRepeat,
+                            accent = BabyPalette.Rose
                         )
                     }
                 }
@@ -1636,14 +1656,13 @@ private fun ReminderEditorDialog(
                     )
                 }
 
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("备注") },
-                    placeholder = { Text("地点、医生交代或注意事项") },
+                    label = "备注",
+                    placeholder = "地点、医生交代或注意事项",
                     minLines = 2,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 ReminderSwitchRow(
@@ -1664,16 +1683,15 @@ private fun ReminderEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
+                    BabySecondaryButton(
+                        text = "取消",
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("取消")
-                    }
-                    Button(
+                        modifier = Modifier.weight(1f)
+                    )
+                    BabyPrimaryButton(
+                        text = "保存",
                         onClick = {
-                            val time = parsedTime ?: return@Button
+                            val time = parsedTime ?: return@BabyPrimaryButton
                             val dueAt = dueDate
                                 .atTime(time)
                                 .atZone(ZoneId.systemDefault())
@@ -1696,12 +1714,9 @@ private fun ReminderEditorDialog(
                             )
                         },
                         enabled = canSave,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26A69A))
-                    ) {
-                        Text("保存", color = Color.White)
-                    }
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 }
             }
         }
@@ -1745,7 +1760,7 @@ private fun ReminderSwitchRow(
         Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(10.dp))
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        BabySwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -1928,12 +1943,10 @@ private fun MiuixDashboardPanel(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
+    BabyDynamicContentCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.26f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+        accent = accent,
+        cornerRadius = 30.dp
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -1967,7 +1980,7 @@ private fun MiuixActionCard(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Card(
+    BabyDynamicContentCard(
         modifier = modifier
             .miuixPressable(interactionSource)
             .clickable(
@@ -1975,10 +1988,8 @@ private fun MiuixActionCard(
                 indication = null,
                 onClick = onClick
             ),
-        shape = RoundedCornerShape(30.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        accent = accent,
+        cornerRadius = 30.dp
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
@@ -2016,12 +2027,10 @@ private fun AnimatedStatCard(
     value: String,
     label: String
 ) {
-    Card(
+    BabyDynamicContentCard(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, accent.copy(alpha = 0.2f)),
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.08f))
+        accent = accent,
+        cornerRadius = 28.dp
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(
@@ -2056,37 +2065,52 @@ private fun AddBabyDialog(
     var showAddDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    AlertDialog(
+    BabyGlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("添加宝宝", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it },
-                    label = { Text("宝宝名字") }, singleLine = true, shape = RoundedCornerShape(12.dp))
-                OutlinedTextField(value = nickname, onValueChange = { nickname = it },
-                    label = { Text("昵称") }, singleLine = true, shape = RoundedCornerShape(12.dp))
-                OutlinedButton(onClick = { showAddDatePicker = true },
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                    Text("出生日期: $birthDate")
-                }
+                BabyGlassTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = "宝宝名字",
+                    singleLine = true
+                )
+                BabyGlassTextField(
+                    value = nickname,
+                    onValueChange = { nickname = it },
+                    label = "昵称",
+                    singleLine = true
+                )
+                BabySecondaryButton(
+                    text = "出生日期: $birthDate",
+                    onClick = { showAddDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("girl" to "女宝宝", "boy" to "男宝宝").forEach { (g, label) ->
-                        FilterChip(selected = gender == g, onClick = { gender = g },
-                            label = { Text(label) }, modifier = Modifier.weight(1f))
+                        BabyGlassChip(
+                            label = label,
+                            selected = gender == g,
+                            onClick = { gender = g },
+                            modifier = Modifier.weight(1f),
+                            accent = BabyPalette.Rose
+                        )
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                if (name.isNotBlank() && nickname.isNotBlank()) {
-                    onAdd(BabyInfo(name = name.trim(), nickname = nickname.trim(), birthDate = birthDate, gender = gender))
+            BabyPrimaryButton(
+                text = "添加",
+                onClick = {
+                    if (name.isNotBlank() && nickname.isNotBlank()) {
+                        onAdd(BabyInfo(name = name.trim(), nickname = nickname.trim(), birthDate = birthDate, gender = gender))
+                    }
                 }
-            }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))) {
-                Text("添加", color = Color.White)
-            }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { BabySecondaryButton(text = "取消", onClick = onDismiss) }
     )
 
     if (showAddDatePicker) {
@@ -2182,35 +2206,30 @@ private fun GrowthEntrySheet(
                 }
             }
 
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = height,
                 onValueChange = { height = it.filter { c -> c.isDigit() || c == '.' } },
-                label = { Text("身高 (cm)") },
-                placeholder = { Text("如：78.5") },
+                label = "身高 (cm)",
+                placeholder = "如：78.5",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                singleLine = true
             )
 
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = weight,
                 onValueChange = { weight = it.filter { c -> c.isDigit() || c == '.' } },
-                label = { Text("体重 (kg，可选)") },
-                placeholder = { Text("如：10.2") },
+                label = "体重 (kg，可选)",
+                placeholder = "如：10.2",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                singleLine = true
             )
 
-            OutlinedButton(
+            BabySecondaryButton(
+                text = "日期: $date",
                 onClick = { showGrowthDatePicker = true },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("日期: $date", fontSize = 13.sp)
-            }
+                leadingIcon = Icons.Default.CalendarToday
+            )
 
             // Photo selection
             Row(
@@ -2234,11 +2253,11 @@ private fun GrowthEntrySheet(
                     }
                 }
                 if (selectedPhotos.size < 4) {
-                    OutlinedButton(
+                    BabyGlassButton(
                         onClick = { growthPhotoPicker.launch("image/*") },
                         modifier = Modifier.size(64.dp),
                         shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        role = BabyGlassRole.Clear
                     ) {
                         Icon(Icons.Default.Add, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
                     }
@@ -2270,18 +2289,19 @@ private fun GrowthEntrySheet(
                     }
                 }
                 if (selectedVideos.size < 3) {
-                    OutlinedButton(
+                    BabyGlassButton(
                         onClick = { growthVideoPicker.launch("video/*") },
                         modifier = Modifier.size(64.dp),
                         shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        role = BabyGlassRole.Clear
                     ) {
                         Icon(Icons.Default.Videocam, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
                     }
                 }
             }
 
-            Button(
+            BabyPrimaryButton(
+                text = "保存记录",
                 onClick = {
                     val h = height.trim()
                     if (h.isNotEmpty()) {
@@ -2307,10 +2327,8 @@ private fun GrowthEntrySheet(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                shape = RoundedCornerShape(16.dp),
                 enabled = height.trim().isNotEmpty()
-            ) { Text("保存记录", color = Color.White) }
+            )
         }
     }
 
@@ -2358,7 +2376,7 @@ private fun MilestoneDetailDialog(
 
     var selectedGroup by remember { mutableStateOf(ageGroups.first().first) }
 
-    AlertDialog(
+    BabyGlassAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text("成长里程碑", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -2435,7 +2453,7 @@ private fun MilestoneDetailDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { BabySecondaryButton(text = "关闭", onClick = onDismiss) },
         modifier = Modifier.fillMaxWidth(0.95f)
     )
 }
@@ -2522,29 +2540,24 @@ private fun MilestoneEntrySheet(
                 }
             }
 
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = title, onValueChange = { title = it },
-                label = { Text("标题") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                label = "标题",
+                modifier = Modifier.fillMaxWidth(), singleLine = true
             )
 
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = description, onValueChange = { description = it },
-                label = { Text("描述") },
-                modifier = Modifier.fillMaxWidth(), minLines = 2,
-                shape = RoundedCornerShape(12.dp)
+                label = "描述",
+                modifier = Modifier.fillMaxWidth(), minLines = 2
             )
 
-            OutlinedButton(
+            BabySecondaryButton(
+                text = "日期: $date",
                 onClick = { showMilestoneDatePicker = true },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("日期: $date", fontSize = 13.sp)
-            }
+                leadingIcon = Icons.Default.CalendarToday
+            )
 
             // Photo selection
             Row(
@@ -2568,11 +2581,11 @@ private fun MilestoneEntrySheet(
                     }
                 }
                 if (selectedPhotos.size < 4) {
-                    OutlinedButton(
+                    BabyGlassButton(
                         onClick = { photoPicker.launch("image/*") },
                         modifier = Modifier.size(64.dp),
                         shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        role = BabyGlassRole.Clear
                     ) {
                         Icon(Icons.Default.Add, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
                     }
@@ -2604,18 +2617,19 @@ private fun MilestoneEntrySheet(
                     }
                 }
                 if (selectedVideos.size < 3) {
-                    OutlinedButton(
+                    BabyGlassButton(
                         onClick = { videoPicker.launch("video/*") },
                         modifier = Modifier.size(64.dp),
                         shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        role = BabyGlassRole.Clear
                     ) {
                         Icon(Icons.Default.Videocam, null, Modifier.size(24.dp), tint = Color(0xFFEC407A))
                     }
                 }
             }
 
-            Button(
+            BabyPrimaryButton(
+                text = "保存里程碑",
                 onClick = {
                     if (title.isNotBlank()) {
                         onSave(TimelineRecord(
@@ -2631,9 +2645,8 @@ private fun MilestoneEntrySheet(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A)),
-                shape = RoundedCornerShape(16.dp)
-            ) { Text("保存里程碑", color = Color.White) }
+                enabled = title.isNotBlank()
+            )
         }
     }
 
@@ -2667,27 +2680,11 @@ fun YueMingDatePicker(
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDate.toEpochDay() * 86400000L
+    BabyDateWheelDialog(
+        initialDate = initialDate,
+        onDateSelected = onDateSelected,
+        onDismiss = onDismiss
     )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { millis ->
-                    onDateSelected(
-                        Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-                    )
-                }
-                onDismiss()
-            }) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    ) {
-        DatePicker(state = datePickerState)
-    }
 }
 
 @Composable
@@ -2696,128 +2693,11 @@ fun YueMingTimePicker(
     onTimeSelected: (LocalTime) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedHour by remember(initialTime) { mutableStateOf(initialTime.hour) }
-    var selectedMinute by remember(initialTime) { mutableStateOf(initialTime.minute) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .widthIn(max = 380.dp),
-            shape = RoundedCornerShape(30.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "选择时间",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            "%02d:%02d".format(selectedHour, selectedMinute),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭")
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(236.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "小时",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        MiuixWheelPicker(
-                            values = (0..23).toList(),
-                            selectedValue = selectedHour,
-                            onValueChange = { selectedHour = it },
-                            valueLabel = { "%02d".format(it) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    Text(
-                        ":",
-                        modifier = Modifier.padding(top = 28.dp),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "分钟",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        MiuixWheelPicker(
-                            values = (0..59).toList(),
-                            selectedValue = selectedMinute,
-                            onValueChange = { selectedMinute = it },
-                            valueLabel = { "%02d".format(it) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("取消")
-                    }
-                    Button(
-                        onClick = {
-                            onTimeSelected(LocalTime.of(selectedHour, selectedMinute))
-                            onDismiss()
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26A69A))
-                    ) {
-                        Text("确定", color = Color.White)
-                    }
-                }
-            }
-        }
-    }
+    BabyTimeWheelDialog(
+        initialTime = initialTime,
+        onTimeSelected = onTimeSelected,
+        onDismiss = onDismiss
+    )
 }
 
 @Composable

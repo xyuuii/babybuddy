@@ -1,19 +1,28 @@
 package com.yueming.baby.ui.screens
 
 import android.content.Context
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.view.Window
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -36,9 +45,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -54,9 +60,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Delete
@@ -68,8 +72,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -99,17 +102,29 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.yueming.baby.ui.components.BabyBrandWordmark
-import com.yueming.baby.ui.components.BabyMetricChip
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import com.yueming.baby.ui.components.BabyDangerButton
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyGlassIconButton
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassTitle
+import com.yueming.baby.ui.components.BabyLiquidFab
 import com.yueming.baby.ui.components.BabyPalette
 import com.yueming.baby.ui.components.BabyPill
-import com.yueming.baby.ui.components.BabySectionHeader
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.data.DataManager
@@ -117,7 +132,7 @@ import com.yueming.baby.data.PhotoEntry
 import com.yueming.baby.data.belongsToBaby
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
 import com.yueming.baby.ui.components.ThumbnailManager
-import com.yueming.baby.ui.components.VideoPlayerDialog
+import com.yueming.baby.ui.components.VideoPlayer
 import com.yueming.baby.ui.components.VideoThumbnail
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
@@ -199,9 +214,20 @@ private fun formatGalleryDateMeta(raw: String): String {
     return date.format(DateTimeFormatter.ofPattern("EEEE"))
 }
 
-private fun formatMemoryDate(raw: String): String {
-    val date = parsePhotoDate(raw) ?: return raw.ifBlank { "未标记日期" }
-    return date.format(DateTimeFormatter.ofPattern("M月d日"))
+private fun Window.applyMediaViewerSystemBars(view: android.view.View, barColor: Color) {
+    addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+    WindowCompat.setDecorFitsSystemWindows(this, false)
+    setBackgroundDrawable(ColorDrawable(barColor.toArgb()))
+    decorView.setBackgroundColor(barColor.toArgb())
+    setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+    @Suppress("DEPRECATION")
+    statusBarColor = barColor.toArgb()
+    @Suppress("DEPRECATION")
+    navigationBarColor = barColor.toArgb()
+    val useDarkIcons = barColor.luminance() > 0.5f
+    WindowCompat.getInsetsController(this, view).isAppearanceLightStatusBars = useDarkIcons
+    WindowCompat.getInsetsController(this, view).isAppearanceLightNavigationBars = useDarkIcons
 }
 
 private fun buildGalleryGridItems(sortedPhotos: List<PhotoEntry>): List<GalleryGridItem> {
@@ -378,7 +404,7 @@ private fun MediaGridCard(
             if (isVideo && !selectionMode && !isUploading) {
                 Surface(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.TopStart)
                         .padding(8.dp),
                     shape = RoundedCornerShape(999.dp),
                     color = Color.Black.copy(alpha = 0.66f)
@@ -396,6 +422,46 @@ private fun MediaGridCard(
                         )
                         Text("视频", color = Color.White, fontSize = 11.sp)
                     }
+                }
+            }
+
+            if (!selectionMode && !isUploading && uploadError == null) {
+                val caption = photo.caption.ifBlank { if (isVideo) "视频" else "照片" }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(62.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.54f)
+                                )
+                            )
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
+                    Text(
+                        text = caption,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = formatGalleryDateLabel(photo.date),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
@@ -439,94 +505,31 @@ private fun MediaGridCard(
 }
 
 @Composable
-private fun FilmstripThumbnail(
-    photo: PhotoEntry,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(width = 62.dp, height = 74.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .border(
-                width = if (selected) 2.dp else 0.dp,
-                color = if (selected) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(18.dp)
-            )
-            .combinedClickable(onClick = onClick, onLongClick = {})
-    ) {
-        if (photo.isVideoMedia()) {
-            if (photo.thumbnailPath != null) {
-                AuthenticatedAsyncImage(
-                    model = photo.previewModel(),
-                    contentDescription = photo.caption,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                VideoThumbnail(
-                    filePath = photo.url,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        } else {
-            AuthenticatedAsyncImage(
-                model = photo.previewModel(),
-                contentDescription = photo.caption,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        if (photo.isVideoMedia()) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(4.dp),
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.6f)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier
-                        .padding(3.dp)
-                        .size(12.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun GalleryBottomSelectionBar(
     selectedCount: Int,
     onDeleteClick: () -> Unit,
     onCancelClick: () -> Unit
 ) {
     val bottomBarClearance = LocalBabyBottomBarClearance.current
-    Surface(
+    BabyGlassSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(top = 10.dp, bottom = bottomBarClearance),
         shape = RoundedCornerShape(26.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
-        shadowElevation = 0.dp
+        role = BabyGlassRole.NavigationChrome
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onDeleteClick, enabled = selectedCount > 0) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = "删除",
-                    tint = if (selectedCount > 0) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            BabyGlassIconButton(
+                icon = Icons.Outlined.Delete,
+                onClick = onDeleteClick,
+                enabled = selectedCount > 0,
+                contentDescription = "删除",
+                accent = if (selectedCount > 0) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "已选择 $selectedCount 项",
@@ -534,258 +537,11 @@ private fun GalleryBottomSelectionBar(
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = onCancelClick) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "取消选择"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MemoryBrandHeader(
-    nickname: String,
-    totalCount: Int
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(top = 8.dp, bottom = 6.dp)
-            .miuixFadeSlideIn(initialTranslationY = 10f),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BabyBrandWordmark(subtitle = "${nickname}的成长回忆 · $totalCount 项")
-        Surface(
-            shape = CircleShape,
-            color = BabyPalette.RoseSoft,
-            border = BorderStroke(0.5.dp, BabyPalette.Rose.copy(alpha = 0.22f))
-        ) {
-            Icon(
-                imageVector = Icons.Default.Favorite,
-                contentDescription = null,
-                modifier = Modifier.padding(12.dp).size(20.dp),
-                tint = BabyPalette.Rose
+            BabyGlassIconButton(
+                icon = Icons.Default.Close,
+                onClick = onCancelClick,
+                contentDescription = "取消选择"
             )
-        }
-    }
-}
-
-@Composable
-private fun FeaturedMemoryCard(
-    photo: PhotoEntry?,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(144.dp)
-            .motionCardPress(interactionSource, pressedScale = 0.985f)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = {}
-            ),
-        shape = RoundedCornerShape(30.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(0.5.dp, Color(0xFFFFB6C6).copy(alpha = 0.38f)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEEF2))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(Color(0xFFFFF4F6), Color(0xFFFFDCE6), Color(0xFFFFF8EE))
-                    )
-                )
-        ) {
-            if (photo != null) {
-                if (photo.isVideoMedia()) {
-                    if (photo.thumbnailPath != null) {
-                        AuthenticatedAsyncImage(
-                            model = photo.previewModel(),
-                            contentDescription = photo.caption,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = 0.22f },
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                } else {
-                    AuthenticatedAsyncImage(
-                        model = photo.previewModel(),
-                        contentDescription = photo.caption,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = 0.22f },
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(Icons.Default.Star, null, Modifier.size(14.dp), tint = Color(0xFFFF7E9A))
-                        Text("Today's Memory", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFF6F8E), fontWeight = FontWeight.Bold)
-                    }
-                }
-                Text(
-                    text = photo?.caption?.takeIf { it.isNotBlank() } ?: "Every little smile makes life beautiful.",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = photo?.date?.let(::formatMemoryDate) ?: "记录今天的珍贵瞬间",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentMemoriesRow(
-    photos: List<PhotoEntry>,
-    onOpen: (Int) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .miuixFadeSlideIn(delayMillis = 60, initialTranslationY = 10f),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("最近回忆", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("View All", style = MaterialTheme.typography.labelMedium, color = Color(0xFFFF7E9A), fontWeight = FontWeight.Bold)
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 4.dp)
-        ) {
-            itemsIndexed(photos.take(8), key = { _, photo -> photo.id }) { index, photo ->
-                val interactionSource = remember { MutableInteractionSource() }
-                Card(
-                    modifier = Modifier
-                        .width(112.dp)
-                        .height(142.dp)
-                        .motionCardPress(interactionSource, pressedScale = 0.965f)
-                        .combinedClickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = { onOpen(index) },
-                            onLongClick = {}
-                        ),
-                    shape = RoundedCornerShape(22.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
-                ) {
-                    Column {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(86.dp)
-                                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
-                        ) {
-                            if (photo.isVideoMedia()) {
-                                if (photo.thumbnailPath != null) {
-                                    AuthenticatedAsyncImage(photo.previewModel(), photo.caption, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                } else {
-                                    VideoThumbnail(filePath = photo.url, modifier = Modifier.fillMaxSize())
-                                }
-                                Surface(
-                                    modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = Color.Black.copy(alpha = 0.62f)
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, null, Modifier.padding(4.dp).size(12.dp), tint = Color.White)
-                                }
-                            } else {
-                                AuthenticatedAsyncImage(photo.previewModel(), photo.caption, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            }
-                        }
-                        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                            Text(
-                                text = photo.caption.ifBlank { if (photo.isVideoMedia()) "视频" else "照片" },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = formatMemoryDate(photo.date),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MemoryOverviewRow(
-    photoCount: Int,
-    videoCount: Int,
-    totalCount: Int
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .miuixFadeSlideIn(delayMillis = 100, initialTranslationY = 10f),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        BabyMetricChip("照片", photoCount.toString(), Modifier.weight(1f), BabyPalette.Blue)
-        BabyMetricChip("视频", videoCount.toString(), Modifier.weight(1f), BabyPalette.Rose)
-        BabyMetricChip("回忆", totalCount.toString(), Modifier.weight(1f), BabyPalette.Gold)
-    }
-}
-
-@Composable
-private fun MemoryOverviewCard(
-    label: String,
-    value: String,
-    accent: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.height(82.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = accent)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -903,7 +659,7 @@ fun PhotosScreen() {
         contentWindowInsets = WindowInsets(0.dp),
         floatingActionButton = {
             if (!selectionMode) {
-                FloatingActionButton(
+                BabyLiquidFab(
                     onClick = {
                         if (babyInfo.id.isEmpty()) {
                             Toast.makeText(context, "请先添加宝宝信息", Toast.LENGTH_SHORT).show()
@@ -913,23 +669,15 @@ fun PhotosScreen() {
                             )
                         }
                     },
+                    icon = Icons.Default.Add,
+                    contentDescription = "添加",
                     modifier = Modifier
                         .padding(bottom = bottomBarClearance)
-                        .miuixFadeSlideIn(delayMillis = 120, initialTranslationY = 22f),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(22.dp),
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 1.dp,
-                        pressedElevation = 2.dp
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
+                        .miuixFadeSlideIn(delayMillis = 120, initialTranslationY = 22f)
+                )
+                /*
                         contentDescription = "添加",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                */
             }
         },
         bottomBar = {
@@ -978,22 +726,26 @@ fun PhotosScreen() {
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = statusBarClearance + 10.dp, bottom = bottomBarClearance),
-                        contentAlignment = Alignment.Center
                     ) {
                         Column(
-                            modifier = Modifier.miuixFadeSlideIn(initialTranslationY = 10f),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .miuixFadeSlideIn(initialTranslationY = 10f),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            BabyBrandWordmark(
-                                subtitle = "${babyInfo.nickname.ifBlank { "宝宝" }}的成长相册"
+                            BabyGlassTitle(
+                                title = "照片墙",
+                                subtitle = "${babyInfo.nickname.ifBlank { "宝宝" }}的成长相册",
+                                modifier = Modifier.fillMaxWidth()
                             )
+                            Spacer(modifier = Modifier.weight(1f))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 8.dp),
-                                shape = RoundedCornerShape(30.dp),
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
                                 border = BorderStroke(
                                     0.6.dp,
                                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)
@@ -1007,8 +759,8 @@ fun PhotosScreen() {
                                     Box(
                                         modifier = Modifier
                                             .size(76.dp)
-                                            .clip(RoundedCornerShape(28.dp))
-                                            .background(BabyPalette.Rose.copy(alpha = 0.12f)),
+                                            .clip(RoundedCornerShape(22.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -1030,6 +782,7 @@ fun PhotosScreen() {
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1047,60 +800,22 @@ fun PhotosScreen() {
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         item(
-                            key = "memory-brand",
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            MemoryBrandHeader(
-                                nickname = babyInfo.nickname.ifBlank { "宝宝" },
-                                totalCount = sortedPhotos.size
-                            )
-                        }
-                        item(
-                            key = "memory-featured",
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            FeaturedMemoryCard(
-                                photo = sortedPhotos.firstOrNull(),
-                                onClick = {
-                                    selectedIndex = 0
-                                    viewerVisible = true
-                                }
-                            )
-                        }
-                        item(
-                            key = "memory-recent",
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            RecentMemoriesRow(
-                                photos = sortedPhotos,
-                                onOpen = { index ->
-                                    selectedIndex = index
-                                    viewerVisible = true
-                                }
-                            )
-                        }
-                        item(
-                            key = "memory-overview",
-                            span = { GridItemSpan(maxLineSpan) }
-                        ) {
-                            MemoryOverviewRow(
-                                photoCount = photoCount,
-                                videoCount = videoCount,
-                                totalCount = sortedPhotos.size
-                            )
-                        }
-                        item(
                             key = "memory-wall-title",
                             span = { GridItemSpan(maxLineSpan) }
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 6.dp),
+                                    .padding(top = 2.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                BabySectionHeader(title = "照片墙", modifier = Modifier.weight(1f))
+                                BabyGlassTitle(
+                                    title = "照片墙",
+                                    subtitle = "${photoCount} 张照片 · ${videoCount} 个视频",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(10.dp))
                                 BabyPill(
                                     text = firstVisibleDateLabel.ifBlank { "相册时间线" },
                                     icon = Icons.Outlined.CalendarMonth,
@@ -1173,59 +888,54 @@ fun PhotosScreen() {
             initialPage = selectedIndex.coerceIn(0, sortedPhotos.lastIndex),
             pageCount = { sortedPhotos.size }
         )
-        val filmstripState = rememberLazyListState()
         var zoomScale by remember { mutableFloatStateOf(1f) }
         var zoomOffset by remember { mutableStateOf(Offset.Zero) }
-        var videoPlayPath by remember { mutableStateOf<String?>(null) }
 
         LaunchedEffect(pagerState.currentPage) {
             zoomScale = 1f
             zoomOffset = Offset.Zero
-            filmstripState.animateScrollToItem((pagerState.currentPage - 2).coerceAtLeast(0))
         }
 
         val currentPhoto = sortedPhotos[pagerState.currentPage]
         val currentDateLabel = formatGalleryDateLabel(currentPhoto.date)
-        val immersiveViewer = zoomScale > 1f
+        val currentIsVideo = currentPhoto.isVideoMedia()
+        val immersiveViewer = !currentIsVideo && zoomScale > 1f
 
         Dialog(
             onDismissRequest = { viewerVisible = false },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 dismissOnBackPress = true,
-                dismissOnClickOutside = false
+                dismissOnClickOutside = false,
+                decorFitsSystemWindows = false
             )
         ) {
-            Box(
+            val dialogView = LocalView.current
+            val viewerChromeColor = if (immersiveViewer) Color.Black else MaterialTheme.colorScheme.background
+            if (!dialogView.isInEditMode) {
+                SideEffect {
+                    (dialogView.parent as? DialogWindowProvider)?.window
+                        ?.applyMediaViewerSystemBars(dialogView, viewerChromeColor)
+                }
+            }
+
+            var viewerEntered by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                viewerEntered = true
+            }
+
+            AnimatedVisibility(
+                visible = viewerEntered,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(tween(150)) +
+                    scaleIn(initialScale = 0.965f, animationSpec = BabyMotion.pageScaleSpec()),
+                exit = fadeOut(tween(120)) +
+                    scaleOut(targetScale = 0.985f, animationSpec = tween(160))
+            ) {
+                Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (immersiveViewer) Modifier.background(Color.Black) else Modifier.babyPageBackground())
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                if (zoomScale > 1f) {
-                                    zoomScale = 1f
-                                    zoomOffset = Offset.Zero
-                                } else {
-                                    zoomScale = 2.2f
-                                }
-                            }
-                        )
-                    }
-                    .pointerInput(zoomScale > 1f) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            val newScale = (zoomScale * zoom).coerceIn(1f, 5f)
-                            if (newScale > 1f) {
-                                zoomOffset = Offset(
-                                    x = zoomOffset.x + pan.x,
-                                    y = zoomOffset.y + pan.y
-                                )
-                            } else {
-                                zoomOffset = Offset.Zero
-                            }
-                            zoomScale = newScale
-                        }
-                    }
             ) {
                 HorizontalPager(
                     state = pagerState,
@@ -1235,69 +945,82 @@ fun PhotosScreen() {
                             if (immersiveViewer) {
                                 Modifier
                             } else {
-                                Modifier.padding(start = 14.dp, top = 96.dp, end = 14.dp, bottom = 158.dp)
+                                Modifier.padding(start = 14.dp, top = 96.dp, end = 14.dp, bottom = 74.dp)
                             }
                         ),
-                    userScrollEnabled = zoomScale == 1f
+                    userScrollEnabled = zoomScale == 1f && !currentIsVideo
                 ) { page ->
                     val photo = sortedPhotos[page]
+                    val pageBackground = when {
+                        immersiveViewer -> Color.Black
+                        photo.isVideoMedia() -> MaterialTheme.colorScheme.background
+                        else -> Color.Transparent
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(if (immersiveViewer) 0.dp else 30.dp))
-                            .background(Color.Black)
-                            .graphicsLayer {
-                                scaleX = zoomScale
-                                scaleY = zoomScale
-                                translationX = zoomOffset.x
-                                translationY = zoomOffset.y
-                            },
+                            .background(pageBackground),
                         contentAlignment = Alignment.Center
                     ) {
                         if (photo.isVideoMedia()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                if (photo.thumbnailPath != null) {
-                                    AuthenticatedAsyncImage(
-                                        model = photo.previewModel(),
-                                        contentDescription = photo.caption,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                } else {
-                                    VideoThumbnail(
-                                        filePath = photo.url,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                }
-                                Surface(
-                                    modifier = Modifier.size(68.dp),
-                                    shape = CircleShape,
-                                    color = Color.White.copy(alpha = 0.86f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .combinedClickable(
-                                                onClick = { videoPlayPath = photo.url },
-                                                onLongClick = {}
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = "播放",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(36.dp)
-                                        )
+                            VideoPlayer(
+                                filePath = photo.url,
+                                onClose = { viewerVisible = false },
+                                modifier = Modifier.fillMaxSize(),
+                                showCloseButton = false,
+                                backgroundColor = MaterialTheme.colorScheme.background,
+                                onSwipeToPrevious = {
+                                    val targetPage = (pagerState.currentPage - 1).coerceAtLeast(0)
+                                    if (targetPage != pagerState.currentPage) {
+                                        scope.launch { pagerState.animateScrollToPage(targetPage) }
+                                    }
+                                },
+                                onSwipeToNext = {
+                                    val targetPage = (pagerState.currentPage + 1).coerceAtMost(sortedPhotos.lastIndex)
+                                    if (targetPage != pagerState.currentPage) {
+                                        scope.launch { pagerState.animateScrollToPage(targetPage) }
                                     }
                                 }
-                            }
+                            )
                         } else {
                             AuthenticatedAsyncImage(
                                 model = photo.url,
                                 contentDescription = photo.caption,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = zoomScale
+                                        scaleY = zoomScale
+                                        translationX = zoomOffset.x
+                                        translationY = zoomOffset.y
+                                    }
+                                    .pointerInput(photo.id) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                if (zoomScale > 1f) {
+                                                    zoomScale = 1f
+                                                    zoomOffset = Offset.Zero
+                                                } else {
+                                                    zoomScale = 2.2f
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .pointerInput(photo.id, zoomScale) {
+                                        detectTransformGestures { _, pan, zoom, _ ->
+                                            val newScale = (zoomScale * zoom).coerceIn(1f, 5f)
+                                            if (newScale > 1f) {
+                                                zoomOffset = Offset(
+                                                    x = zoomOffset.x + pan.x,
+                                                    y = zoomOffset.y + pan.y
+                                                )
+                                            } else {
+                                                zoomOffset = Offset.Zero
+                                            }
+                                            zoomScale = newScale
+                                        }
+                                    },
                                 contentScale = ContentScale.Fit
                             )
                         }
@@ -1305,15 +1028,15 @@ fun PhotosScreen() {
                 }
 
                 if (zoomScale == 1f) {
-                    Surface(
+                    BabyGlassSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)
                             .statusBarsPadding()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .miuixFadeSlideIn(delayMillis = 70, initialTranslationY = -10f),
                         shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                        border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
+                        role = BabyGlassRole.Regular
                     ) {
                         Row(
                             modifier = Modifier
@@ -1321,13 +1044,11 @@ fun PhotosScreen() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { viewerVisible = false }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "关闭",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            BabyGlassIconButton(
+                                icon = Icons.Default.Close,
+                                onClick = { viewerVisible = false },
+                                contentDescription = "关闭"
+                            )
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -1346,114 +1067,69 @@ fun PhotosScreen() {
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Row {
-                                IconButton(
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                BabyGlassIconButton(
+                                    icon = Icons.Default.Edit,
                                     onClick = {
                                         editPhotoId = currentPhoto.id
                                         editCaption = currentPhoto.caption
                                         editDate = currentPhoto.date
                                         editDialog = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "编辑",
-                                        tint = BabyPalette.Blue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                IconButton(
+                                    },
+                                    contentDescription = "编辑",
+                                    accent = BabyPalette.Blue
+                                )
+                                BabyGlassIconButton(
+                                    icon = Icons.Default.Delete,
                                     onClick = {
                                         DataManager.deletePhoto(currentPhoto.id)
                                         viewerVisible = false
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "删除",
-                                        tint = BabyPalette.RoseDeep,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                    },
+                                    contentDescription = "删除",
+                                    accent = BabyPalette.RoseDeep
+                                )
                             }
                         }
                     }
                 }
 
                 if (zoomScale == 1f) {
-                    Column(
+                    BabyGlassSurface(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding()
-                            .padding(horizontal = 14.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(horizontal = 14.dp, vertical = 14.dp)
+                            .miuixFadeSlideIn(delayMillis = 90, initialTranslationY = 10f),
+                        shape = RoundedCornerShape(999.dp),
+                        role = BabyGlassRole.Clear
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                            border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
-                        ) {
-                            Text(
-                                text = "${pagerState.currentPage + 1} / ${sortedPhotos.size}",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                            border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
-                        ) {
-                            LazyRow(
-                                state = filmstripState,
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                itemsIndexed(
-                                    items = sortedPhotos,
-                                    key = { _, photo -> photo.id },
-                                    contentType = { _, photo -> if (photo.isVideoMedia()) "video-thumb" else "photo-thumb" }
-                                ) { index, photo ->
-                                    FilmstripThumbnail(
-                                        photo = photo,
-                                        selected = index == pagerState.currentPage,
-                                        onClick = {
-                                            scope.launch { pagerState.animateScrollToPage(index) }
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            text = "${pagerState.currentPage + 1} / ${sortedPhotos.size}",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                        )
                     }
                 }
             }
         }
-
-        if (videoPlayPath != null) {
-            VideoPlayerDialog(
-                videoPath = videoPlayPath!!,
-                onDismiss = { videoPlayPath = null }
-            )
-        }
+    }
     }
 
     if (editDialog) {
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { editDialog = false },
             title = { Text("编辑") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = editCaption,
                         onValueChange = { editCaption = it },
-                        label = { Text("描述") },
+                        label = "描述",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = editDate,
                         onValueChange = { candidate ->
                             editDate = if (candidate.isBlank()) {
@@ -1467,53 +1143,45 @@ fun PhotosScreen() {
                                 }
                             }
                         },
-                        label = { Text("日期（yyyy-MM-dd）") },
+                        label = "日期（yyyy-MM-dd）",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        singleLine = true
                     )
                 }
             },
             confirmButton = {
-                Button(
+                BabyPrimaryButton(
+                    text = "保存",
                     onClick = {
                         DataManager.updatePhoto(editPhotoId, editCaption, editDate)
                         editDialog = false
                     }
-                ) {
-                    Text("保存")
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { editDialog = false }) {
-                    Text("取消")
-                }
+                BabySecondaryButton(text = "取消", onClick = { editDialog = false })
             }
         )
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("确认删除") },
             text = { Text("确定要删除选中的 ${selectedIds.size} 个媒体吗？此操作不可撤销。") },
             confirmButton = {
-                Button(
+                BabyDangerButton(
+                    text = "删除",
                     onClick = {
                         DataManager.deletePhotos(selectedIds)
                         selectedIds = emptySet()
                         selectionMode = false
                         showDeleteConfirm = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                ) {
-                    Text("删除", color = Color.White)
-                }
+                    }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
-                }
+                BabySecondaryButton(text = "取消", onClick = { showDeleteConfirm = false })
             }
         )
     }

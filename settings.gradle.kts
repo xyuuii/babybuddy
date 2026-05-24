@@ -12,6 +12,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
+        google()
         maven {
             url = uri("https://maven.aliyun.com/repository/google")
             content {
@@ -21,7 +22,6 @@ dependencyResolutionManagement {
             }
         }
         maven { url = uri("https://maven.aliyun.com/repository/public") }
-        google()
     }
 }
 rootProject.name = "babybuddy"

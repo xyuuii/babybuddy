@@ -79,7 +79,16 @@ import com.yueming.baby.data.BabyInfo
 import com.yueming.baby.data.ChatMessage
 import com.yueming.baby.data.DataManager
 import com.yueming.baby.data.belongsToBaby
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyDangerButton
+import com.yueming.baby.ui.components.BabyGlassButton
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassTitle
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.BabySecondaryButton
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.MarkdownText
@@ -224,20 +233,21 @@ fun AIScreen() {
     }
 
     if (showClearConfirm) {
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("清空对话历史？") },
             text = { Text("本地和 NAS 同步的 AI 对话记录都会被清空，宝宝成长数据不会受影响。") },
             confirmButton = {
-                Button(
+                BabyDangerButton(
+                    text = "清空",
                     onClick = {
                         DataManager.clearMessages()
                         showClearConfirm = false
                     }
-                ) { Text("清空") }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+                BabySecondaryButton(text = "取消", onClick = { showClearConfirm = false })
             }
         )
     }
@@ -260,10 +270,10 @@ private fun CompactAssistantHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "AI\u52a9\u624b",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Medium
+            BabyGlassTitle(
+                title = "AI助手",
+                subtitle = "$messageCount 条对话",
+                modifier = Modifier.weight(1f)
             )
             IconButton(enabled = messageCount > 0, onClick = onClear) {
                 Icon(
@@ -325,15 +335,11 @@ private fun WelcomeContent(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             suggestions.forEach { suggestion ->
-                AssistChip(
+                BabyGlassChip(
+                    label = suggestion,
+                    selected = false,
                     onClick = { onSendSuggestion(suggestion) },
-                    label = { Text(suggestion, maxLines = 1) },
-                    shape = RoundedCornerShape(22.dp),
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        labelColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    accent = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -606,51 +612,32 @@ private fun InputRow(
     enabled: Boolean,
     onSend: () -> Unit
 ) {
-    Surface(
+    BabyGlassSurface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
+        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        role = BabyGlassRole.NavigationChrome
     ) {
         Column {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
+                BabyGlassTextField(
                     value = value,
                     onValueChange = onValueChange,
                     enabled = enabled,
                     modifier = Modifier.weight(1f),
                     minLines = 1,
                     maxLines = 4,
-                    placeholder = {
-                        Text(
-                            if (enabled) "问问睡眠、喂养、疫苗或成长记录..." else "AI 正在回复",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
-                        )
-                    },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedBorderColor = BabyPalette.Rose.copy(alpha = 0.35f),
-                        unfocusedBorderColor = Color.Transparent,
-                        disabledBorderColor = Color.Transparent
-                    )
+                    placeholder = if (enabled) "问问睡眠、喂养、疫苗或成长记录..." else "AI 正在回复"
                 )
 
-                FilledIconButton(
-                    enabled = enabled && value.isNotBlank(),
-                    onClick = onSend,
+                BabyGlassButton(
+                    onClick = if (enabled && value.isNotBlank()) onSend else null,
                     modifier = Modifier.size(48.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
+                    shape = CircleShape,
+                    role = if (enabled && value.isNotBlank()) BabyGlassRole.Prominent else BabyGlassRole.Clear
                 ) {
                     val buttonState = when {
                         !enabled -> "loading"
@@ -668,7 +655,7 @@ private fun InputRow(
                                 Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "发送",
                                 tint = if (state == "ready") {
-                                    MaterialTheme.colorScheme.onPrimary
+                                    MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
                                 }
