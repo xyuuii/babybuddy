@@ -53,7 +53,17 @@ import androidx.core.content.ContextCompat
 import com.yueming.baby.data.*
 import com.yueming.baby.ui.components.AppEditorDialog
 import com.yueming.baby.ui.components.AuthenticatedAsyncImage
+import com.yueming.baby.ui.components.BabyDateWheelDialog
+import com.yueming.baby.ui.components.BabyGlassButton
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSearchBar
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassTitle
 import com.yueming.baby.ui.components.BabyPalette
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
+import com.yueming.baby.ui.components.BabyTimeWheelDialog
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.LocalBabyStatusBarClearance
 import com.yueming.baby.ui.components.VideoPlayer
@@ -188,58 +198,13 @@ private fun TimelineFilterChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val chipCorner by animateDpAsState(
-        targetValue = if (pressed || selected) 24.dp else 22.dp,
-        animationSpec = BabyMotion.cardShapeSpring(),
-        label = "timelineFilterCorner"
+    BabyGlassChip(
+        label = label,
+        icon = icon,
+        accent = accent,
+        selected = selected,
+        onClick = onClick
     )
-    val chipColor by animateColorAsState(
-        targetValue = if (selected) {
-            accent.copy(alpha = if (pressed) 0.2f else 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = if (pressed) 1f else 0.92f)
-        },
-        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
-        label = "timelineFilterColor"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) {
-            accent.copy(alpha = if (pressed) 0.46f else 0.34f)
-        } else {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (pressed) 0.42f else 0.28f)
-        },
-        animationSpec = tween(durationMillis = 180, easing = BabyMotion.fadeThroughEase),
-        label = "timelineFilterBorder"
-    )
-
-    Surface(
-        shape = RoundedCornerShape(chipCorner),
-        color = chipColor,
-        border = BorderStroke(0.5.dp, borderColor),
-        modifier = Modifier
-            .motionCardPress(interactionSource = interactionSource, pressedScale = 0.96f)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, Modifier.size(14.dp), tint = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(6.dp))
-            Text(
-                label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) accent else MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
 }
 
 @Composable
@@ -283,6 +248,7 @@ fun TimelineScreen() {
     val timeline by DataManager.timeline.collectAsState()
     val allCategories = DataManager.allCategories
     var activeCategory by remember { mutableStateOf("all") }
+    var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<TimelineRecord?>(null) }
     var playVideoPath by remember { mutableStateOf<String?>(null) }
@@ -294,9 +260,23 @@ fun TimelineScreen() {
         timeline.filter { belongsToBaby(it.babyId, babyInfo.id) }
     }
 
-    val filtered = remember(scopedTimeline, activeCategory) {
-        if (activeCategory == "all") scopedTimeline
-        else scopedTimeline.filter { it.category == activeCategory }
+    val filtered = remember(scopedTimeline, activeCategory, searchQuery) {
+        val categoryRecords = if (activeCategory == "all") {
+            scopedTimeline
+        } else {
+            scopedTimeline.filter { it.category == activeCategory }
+        }
+        val keyword = searchQuery.trim()
+        if (keyword.isBlank()) {
+            categoryRecords
+        } else {
+            categoryRecords.filter { record ->
+                record.title.contains(keyword, ignoreCase = true) ||
+                    record.description.contains(keyword, ignoreCase = true) ||
+                    record.date.contains(keyword, ignoreCase = true) ||
+                    record.tags.any { it.contains(keyword, ignoreCase = true) }
+            }
+        }
     }
     val activeCategoryLabel = remember(activeCategory, allCategories) {
         if (activeCategory == "all") {
@@ -332,10 +312,18 @@ fun TimelineScreen() {
                 .fillMaxSize()
                 .padding(start = 20.dp, end = 20.dp, top = statusBarClearance + 12.dp, bottom = 0.dp)
         ) {
-            Text(
-                "时间线",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Medium
+            BabyGlassTitle(
+                title = "时间线",
+                subtitle = "${sorted.size} 条记录"
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            BabyGlassSearchBar(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = "搜索记录、标签或日期",
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(Modifier.height(10.dp))
@@ -1005,32 +993,41 @@ fun TimelineScreen() {
                         .align(Alignment.Center)
                         .size(52.dp)
                         .scale(1f + (fabScale - 1f) * 0.35f)
-                        .background(primaryPink.copy(alpha = fabGlow * 0.08f), CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = fabGlow * 0.018f), CircleShape)
                 )
-                ExtendedFloatingActionButton(
-                    onClick = {
+                BabyGlassButton(
+                    modifier = Modifier.heightIn(min = 62.dp),
+                    onClick = addRecord@{
                         if (babyInfo.id.isEmpty() || babyInfo.name.isEmpty()) {
                             Toast.makeText(
                                 context,
                                 "请先在首页添加宝宝信息",
                                 Toast.LENGTH_SHORT
                             ).show()
-                            return@ExtendedFloatingActionButton
+                            return@addRecord
                         }
                         editingRecord = null
                         showAddDialog = true
                     },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(22.dp),
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 1.dp,
-                        pressedElevation = 2.dp
-                    )
+                    shape = RoundedCornerShape(999.dp),
+                    role = BabyGlassRole.FloatingTabBar
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "添加记录")
-                    Spacer(Modifier.width(6.dp))
-                    Text("添加记录", fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "添加记录",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "添加记录",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
@@ -1112,6 +1109,7 @@ private fun AddRecordDialog(
     var selectedVideos by remember { mutableStateOf(initialData?.videos ?: emptyList()) }
     var videoPreviewPath by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val allCategories = DataManager.allCategories
     val selectedCatConfig = allCategories.find { it.id == category }
@@ -1342,24 +1340,22 @@ private fun AddRecordDialog(
 
             // ── Title section ──────────────────────────────────
             SectionHeader("标题", Icons.Default.Edit)
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text("如：第一次翻身") },
+                placeholder = "如：第一次翻身",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                singleLine = true
             )
 
             // ── Description section ────────────────────────────
             SectionHeader("描述", Icons.Default.Description)
-            OutlinedTextField(
+            BabyGlassTextField(
                 value = description,
                 onValueChange = { description = it },
-                placeholder = { Text("记录下这个珍贵时刻...") },
+                placeholder = "记录下这个珍贵时刻...",
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                shape = RoundedCornerShape(12.dp),
                 trailingIcon = {
                     IconButton(onClick = { startSpeechInput() }) {
                         Icon(Icons.Default.Mic, contentDescription = "语音输入")
@@ -1373,43 +1369,18 @@ private fun AddRecordDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
+                BabySecondaryButton(
+                    text = date,
                     onClick = { showDatePicker = true },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(date, fontSize = 13.sp)
-                }
-                OutlinedButton(
-                    onClick = {
-                        val parts = timeStr.split(":")
-                        val h = parts.getOrNull(0)?.toIntOrNull() ?: 12
-                        val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                        TimePickerDialog(
-                            context,
-                            { _, hour, minute ->
-                                timeStr = "%02d:%02d".format(hour, minute)
-                            },
-                            h, m, true
-                        ).show()
-                    },
+                    leadingIcon = Icons.Default.CalendarToday
+                )
+                BabySecondaryButton(
+                    text = timeStr,
+                    onClick = { showTimePicker = true },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Schedule,
-                        contentDescription = null,
-                        Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(timeStr, fontSize = 13.sp)
-                }
+                    leadingIcon = Icons.Default.Schedule
+                )
             }
 
             // ── Category section ───────────────────────────────
@@ -1421,26 +1392,13 @@ private fun AddRecordDialog(
                 allCategories.forEach { cat ->
                     val catColor = Color(cat.color)
                     val sel = category == cat.id
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = if (sel) catColor else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.clickable { category = cat.id }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(catIcon(cat.id), null, Modifier.size(13.dp),
-                                tint = if (sel) Color.White else Color(cat.color))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                cat.label,
-                                fontSize = 12.sp,
-                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                color = if (sel) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    BabyGlassChip(
+                        label = cat.label,
+                        icon = catIcon(cat.id),
+                        accent = catColor,
+                        selected = sel,
+                        onClick = { category = cat.id }
+                    )
                 }
             }
 
@@ -1457,10 +1415,11 @@ private fun AddRecordDialog(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     selectedCatConfig?.children?.forEach { sub ->
-                        FilterChip(
+                        BabyGlassChip(
+                            label = sub.name,
                             selected = subCategory == sub.id,
                             onClick = { subCategory = sub.id },
-                            label = { Text(sub.name, fontSize = 11.sp) }
+                            accent = selectedCatConfig?.let { Color(it.color) } ?: primaryPink
                         )
                     }
                 }
@@ -1508,15 +1467,11 @@ private fun AddRecordDialog(
                 }
                 if (selectedPhotos.size < 4) {
                     item {
-                        OutlinedButton(
+                        BabyGlassButton(
                             onClick = { imagePicker.launch("image/*") },
                             modifier = Modifier.size(76.dp),
                             shape = RoundedCornerShape(14.dp),
-                            contentPadding = PaddingValues(0.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                primaryPink.copy(alpha = 0.4f)
-                            )
+                            role = BabyGlassRole.Clear
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
@@ -1592,15 +1547,11 @@ private fun AddRecordDialog(
                 }
                 if (selectedVideos.size < 3) {
                     item {
-                        OutlinedButton(
+                        BabyGlassButton(
                             onClick = { videoPicker.launch("video/*") },
                             modifier = Modifier.size(76.dp),
                             shape = RoundedCornerShape(14.dp),
-                            contentPadding = PaddingValues(0.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                primaryPink.copy(alpha = 0.4f)
-                            )
+                            role = BabyGlassRole.Clear
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
@@ -1628,27 +1579,11 @@ private fun AddRecordDialog(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     tags.forEach { tag ->
-                        InputChip(
+                        BabyGlassChip(
+                            label = "$tag ×",
                             selected = true,
                             onClick = { tags = tags.filter { it != tag } },
-                            label = { Text(tag, fontSize = 12.sp) },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = null,
-                                    Modifier.size(14.dp)
-                                )
-                            },
-                            colors = InputChipDefaults.inputChipColors(
-                                selectedContainerColor = primaryPink.copy(alpha = 0.12f),
-                                selectedLabelColor = primaryPink
-                            ),
-                            border = InputChipDefaults.inputChipBorder(
-                                borderColor = primaryPink.copy(alpha = 0.25f),
-                                selectedBorderColor = primaryPink.copy(alpha = 0.4f),
-                                enabled = true,
-                                selected = true
-                            )
+                            accent = primaryPink
                         )
                     }
                 }
@@ -1661,12 +1596,11 @@ private fun AddRecordDialog(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         suggested.forEach { tag ->
-                            AssistChip(
+                            BabyGlassChip(
+                                label = "+ $tag",
+                                selected = false,
                                 onClick = { tags = tags + tag },
-                                label = { Text("+ $tag", fontSize = 11.sp) },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
+                                accent = BabyPalette.Rose
                             )
                         }
                     }
@@ -1677,7 +1611,8 @@ private fun AddRecordDialog(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
             // ── Save button ────────────────────────────────────
-            Button(
+            BabyPrimaryButton(
+                text = if (initialData != null) "保存修改" else "保存记录",
                 onClick = {
                     if (title.isNotBlank()) {
                         val catLabel =
@@ -1701,26 +1636,10 @@ private fun AddRecordDialog(
                         )
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = primaryPink),
-                shape = RoundedCornerShape(16.dp),
-                enabled = title.isNotBlank()
-            ) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = null,
-                    Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (initialData != null) "保存修改" else "保存记录",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+                modifier = Modifier.fillMaxWidth(),
+                enabled = title.isNotBlank(),
+                leadingIcon = Icons.Default.Check
+            )
             }
 
             AnimatedVisibility(
@@ -1781,6 +1700,21 @@ private fun AddRecordDialog(
     }
 
     // ── Video preview ──────────────────────────────────────────────
+    if (showTimePicker) {
+        val parts = timeStr.split(":")
+        val safeTime = LocalTime.of(
+            parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 12,
+            parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        )
+        BabyTimeWheelDialog(
+            initialTime = safeTime,
+            onTimeSelected = { selectedTime ->
+                timeStr = "%02d:%02d".format(selectedTime.hour, selectedTime.minute)
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
+
     videoPreviewPath?.let { path ->
         Dialog(
             onDismissRequest = { videoPreviewPath = null },
@@ -1938,20 +1872,20 @@ private fun VoiceInputSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
+                BabyGlassButton(
                     onClick = onDismiss,
                     modifier = Modifier.size(48.dp),
                     shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(0.dp)
+                    role = BabyGlassRole.Clear
                 ) {
                     Icon(Icons.Default.Close, contentDescription = "取消")
                 }
 
-                OutlinedButton(
+                BabyGlassButton(
                     onClick = if (isListening) onStop else onRetry,
                     modifier = Modifier.size(48.dp),
                     shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(0.dp)
+                    role = BabyGlassRole.Clear
                 ) {
                     Icon(
                         if (isListening) Icons.Default.Stop else Icons.Default.Refresh,
@@ -1960,29 +1894,15 @@ private fun VoiceInputSheet(
                     )
                 }
 
-                Button(
+                BabyPrimaryButton(
+                    text = "加入描述",
                     onClick = onCommit,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp),
                     enabled = transcript.isNotBlank() && !isListening,
-                    colors = ButtonDefaults.buttonColors(containerColor = primaryPink),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "加入描述",
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip
-                    )
-                }
+                    leadingIcon = Icons.Default.Check
+                )
             }
         }
     }
@@ -2021,31 +1941,9 @@ private fun YueMingTimelineDatePicker(
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDate.toEpochDay() * 86400000L
+    BabyDateWheelDialog(
+        initialDate = initialDate,
+        onDateSelected = onDateSelected,
+        onDismiss = onDismiss
     )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { millis ->
-                    onDateSelected(
-                        Instant.ofEpochMilli(millis)
-                            .atZone(ZoneId.systemDefault())
-                            .toLocalDate()
-                    )
-                }
-                onDismiss()
-            }) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    ) {
-        DatePicker(state = datePickerState)
-    }
 }

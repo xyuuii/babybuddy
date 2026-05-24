@@ -36,6 +36,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyDangerButton
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassIconButton
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.motionListItem
@@ -105,19 +114,21 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                 .background(appBarColor)
         )
         // Top bar
-        Surface(
+        BabyGlassSurface(
             modifier = Modifier.fillMaxWidth(),
-            color = appBarColor,
-            shadowElevation = 0.dp
+            shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+            role = BabyGlassRole.NavigationChrome
         ) {
             Row(
                 Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "关闭")
-                }
+                BabyGlassIconButton(
+                    icon = Icons.Default.Close,
+                    onClick = onDismiss,
+                    contentDescription = "关闭"
+                )
                 Text("喂养日志", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.width(48.dp))
             }
@@ -177,23 +188,16 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                                 val (type, label) = FEEDING_TYPES[index]
                                 val info = feedingTypeInfo[type]!!
                                 val isSelected = selectedType == type
-                                FilterChip(
+                                BabyGlassChip(
+                                    label = label,
+                                    icon = info.icon,
+                                    accent = info.color,
                                     selected = isSelected,
                                     onClick = {
                                         selectedType = type
                                         quickNumber = feedingQuickEntryDefaultValue(type)
                                         quickNotes = ""
-                                    },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(info.icon, null, Modifier.size(14.dp), tint = info.color)
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(label, fontSize = 12.sp, maxLines = 1)
-                                        }
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = info.color.copy(alpha = 0.3f)
-                                    )
+                                    }
                                 )
                             }
                         }
@@ -258,17 +262,15 @@ fun FeedingScreen(onDismiss: () -> Unit) {
 
                                 if (needsNumber) {
                                     val unit = feedingQuickEntryUnit(selectedType)
-                                    OutlinedTextField(
+                                    BabyGlassTextField(
                                         value = quickNumber,
                                         onValueChange = { quickNumber = sanitizeFeedingQuickEntryNumber(it) },
-                                        label = { Text(if (selectedType == "breast") "时长" else "数量") },
-                                        placeholder = { Text("输入$unit") },
+                                        label = if (selectedType == "breast") "时长" else "数量",
+                                        placeholder = "输入$unit",
                                         trailingIcon = { Text(unit, fontSize = 12.sp) },
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        textStyle = MaterialTheme.typography.bodyMedium
                                     )
 
                                     FlowRow(
@@ -276,28 +278,26 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                                         verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         feedingQuickEntryPresets(selectedType).forEach { preset ->
-                                            AssistChip(
+                                            BabyGlassChip(
+                                                label = "$preset $unit",
+                                                selected = quickNumber == preset.toString(),
                                                 onClick = { quickNumber = preset.toString() },
-                                                label = { Text("$preset $unit", fontSize = 11.sp) },
-                                                colors = AssistChipDefaults.assistChipColors(
-                                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
-                                                )
+                                                accent = selectedInfo.color
                                             )
                                         }
                                     }
                                 } else {
-                                    OutlinedTextField(
+                                    BabyGlassTextField(
                                         value = quickNotes,
                                         onValueChange = { quickNotes = it },
-                                        placeholder = { Text("备注，例如：米粉两勺、香蕉半根") },
+                                        placeholder = "备注，例如：米粉两勺、香蕉半根",
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
-                                        textStyle = MaterialTheme.typography.bodyMedium
                                     )
                                 }
 
-                                Button(
+                                BabyPrimaryButton(
+                                    text = "记录${selectedInfo.label}",
                                     modifier = Modifier.fillMaxWidth().height(48.dp),
                                     onClick = {
                                         DataManager.addFeedingRecord(
@@ -311,13 +311,8 @@ fun FeedingScreen(onDismiss: () -> Unit) {
                                         quickNotes = ""
                                     },
                                     enabled = canSaveFeedingQuickEntry(selectedType, quickNumber),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEC407A))
-                                ) {
-                                    Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("记录${selectedInfo.label}")
-                                }
+                                    leadingIcon = Icons.Default.Add
+                                )
                             }
                         }
                     }
@@ -388,17 +383,20 @@ fun FeedingScreen(onDismiss: () -> Unit) {
 
     // Delete confirm
     deleteConfirmId?.let { id ->
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { deleteConfirmId = null },
             title = { Text("删除记录") },
             text = { Text("确定要删除这条喂养记录吗？") },
             confirmButton = {
-                TextButton(onClick = {
-                    DataManager.deleteFeedingRecord(id)
-                    deleteConfirmId = null
-                }) { Text("删除", color = Color(0xFFEF5350)) }
+                BabyDangerButton(
+                    text = "删除",
+                    onClick = {
+                        DataManager.deleteFeedingRecord(id)
+                        deleteConfirmId = null
+                    }
+                )
             },
-            dismissButton = { TextButton(onClick = { deleteConfirmId = null }) { Text("取消") } }
+            dismissButton = { BabySecondaryButton(text = "取消", onClick = { deleteConfirmId = null }) }
         )
     }
 }

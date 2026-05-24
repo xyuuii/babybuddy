@@ -35,6 +35,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.yueming.baby.data.*
+import com.yueming.baby.ui.components.BabyGlassAlertDialog
+import com.yueming.baby.ui.components.BabyGlassChip
+import com.yueming.baby.ui.components.BabyGlassIconButton
+import com.yueming.baby.ui.components.BabyGlassTextField
+import com.yueming.baby.ui.components.BabyGlassRole
+import com.yueming.baby.ui.components.BabyGlassSurface
+import com.yueming.baby.ui.components.BabyPrimaryButton
+import com.yueming.baby.ui.components.BabySecondaryButton
+import com.yueming.baby.ui.components.BabyStatusTag
+import com.yueming.baby.ui.components.BabyStatusTone
 import com.yueming.baby.ui.components.LocalBabyBottomBarClearance
 import com.yueming.baby.ui.components.babyPageBackground
 import com.yueming.baby.ui.motion.BabyMotion
@@ -95,24 +105,29 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                 .background(appBarColor)
         )
         // Top bar
-        Surface(
+        BabyGlassSurface(
             modifier = Modifier.fillMaxWidth(),
-            color = appBarColor,
-            shadowElevation = 0.dp
+            shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+            role = BabyGlassRole.NavigationChrome
         ) {
             Row(
                 Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "关闭")
-                }
+                BabyGlassIconButton(
+                    icon = Icons.Default.Close,
+                    onClick = onDismiss,
+                    contentDescription = "关闭"
+                )
                 Text("疫苗接种", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Row {
-                    TextButton(onClick = { showOptional = !showOptional }) {
-                        Text(if (showOptional) "隐藏自费" else "显示自费", fontSize = 12.sp)
-                    }
+                    BabyGlassChip(
+                        label = if (showOptional) "隐藏自费" else "显示自费",
+                        selected = showOptional,
+                        onClick = { showOptional = !showOptional },
+                        accent = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -177,17 +192,17 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (nextVaccine.scheduledAgeMonths <= ageMonths) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFFF5252)
-                                ) {
-                                    Text("到期", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                                }
+                                BabyStatusTag(
+                                    label = "到期",
+                                    tone = BabyStatusTone.Danger,
+                                    compact = true
+                                )
                             } else {
-                                Text("${nextVaccine.scheduledAgeMonths - ageMonths}个月后",
-                                    fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFFFA726))
+                                BabyStatusTag(
+                                    label = "${nextVaccine.scheduledAgeMonths - ageMonths}个月后",
+                                    tone = BabyStatusTone.Warning,
+                                    compact = true
+                                )
                             }
                         }
                     }
@@ -336,7 +351,7 @@ fun VaccineScreen(onDismiss: () -> Unit) {
 
     // Mark as done dialog
     markDialogVaccine?.let { vaccine ->
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { markDialogVaccine = null },
             title = {
                 Text("${vaccine.name} 第${vaccine.doseNumber}剂",
@@ -347,52 +362,53 @@ fun VaccineScreen(onDismiss: () -> Unit) {
                     Text("预防: ${vaccine.diseasePrevented}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = markDate,
                         onValueChange = { markDate = it },
-                        label = { Text("接种日期 (YYYY-MM-DD)") },
+                        label = "接种日期 (YYYY-MM-DD)",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    BabyGlassTextField(
                         value = markBatch,
                         onValueChange = { markBatch = it },
-                        label = { Text("批号（可选）") },
+                        label = "批号（可选）",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        singleLine = true
                     )
                 }
             },
             confirmButton = {
-                Button(
+                BabyPrimaryButton(
+                    text = "标记已接种",
                     onClick = {
                         DataManager.markVaccineDone(vaccine.id, markDate, markBatch)
                         markDialogVaccine = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                ) { Text("标记已接种", color = Color.White) }
+                    }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { markDialogVaccine = null }) { Text("取消") }
+                BabySecondaryButton(text = "取消", onClick = { markDialogVaccine = null })
             }
         )
     }
 
     // Undo confirm
     showUndoConfirm?.let { vaccine ->
-        AlertDialog(
+        BabyGlassAlertDialog(
             onDismissRequest = { showUndoConfirm = null },
             title = { Text("撤销接种记录") },
             text = { Text("确定要撤销「${vaccine.name} 第${vaccine.doseNumber}剂」的接种记录吗？") },
             confirmButton = {
-                TextButton(onClick = {
-                    DataManager.undoVaccine(vaccine.id)
-                    showUndoConfirm = null
-                }) { Text("撤销", color = Color(0xFFFFA726)) }
+                BabyPrimaryButton(
+                    text = "撤销",
+                    onClick = {
+                        DataManager.undoVaccine(vaccine.id)
+                        showUndoConfirm = null
+                    }
+                )
             },
-            dismissButton = { TextButton(onClick = { showUndoConfirm = null }) { Text("取消") } }
+            dismissButton = { BabySecondaryButton(text = "取消", onClick = { showUndoConfirm = null }) }
         )
     }
 }

@@ -2,6 +2,7 @@ package com.yueming.baby.ui.theme
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -24,53 +26,57 @@ enum class ThemeMode { LIGHT, DARK, SYSTEM }
 private val LightColorScheme = lightColorScheme(
     primary = Pink40,
     onPrimary = Color.White,
-    primaryContainer = Pink80,
+    primaryContainer = Color(0xFFFFE8EF),
     onPrimaryContainer = Pink20,
     secondary = BabyBlue,
     onSecondary = OnSurfaceLight,
-    secondaryContainer = Color(0xFFEAF4FC),
+    secondaryContainer = Color(0xFFF0F6FA),
     onSecondaryContainer = Color(0xFF244B63),
     tertiary = BabyGold,
     onTertiary = Color(0xFF402D00),
-    tertiaryContainer = Color(0xFFFFF2D9),
+    tertiaryContainer = Color(0xFFFFF6E7),
     onTertiaryContainer = Color(0xFF5B3C00),
     surface = SurfaceLight,
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFF7F2),
+    surfaceContainerLow = Color(0xFFFAFAFB),
     surfaceContainer = SurfaceContainerLight,
-    surfaceContainerHigh = Color(0xFFFFEAF0),
-    surfaceContainerHighest = Color(0xFFFFDCE7),
+    surfaceContainerHigh = Color(0xFFF0F0F2),
+    surfaceContainerHighest = Color(0xFFE6E6EA),
     onSurface = OnSurfaceLight,
-    onSurfaceVariant = Color(0xFF705D62),
-    surfaceVariant = Color(0xFFF8E7E5),
-    outline = Color(0xFFD9C6C3),
-    outlineVariant = Color(0xFFEEDDD8),
-    background = Color(0xFFFFF8F2),
+    onSurfaceVariant = Color(0xFF636366),
+    surfaceVariant = Color(0xFFEDEDEF),
+    outline = Color(0xFFC7C7CC),
+    outlineVariant = Color(0xFFE5E5EA),
+    background = Color(0xFFFBFBFD),
     onBackground = OnSurfaceLight,
     surfaceTint = Pink40,
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = PinkPrimaryDark,
-    onPrimary = SurfaceDark,
-    primaryContainer = Pink20,
+    onPrimary = Color(0xFF17171A),
+    primaryContainer = Color(0xFF3A2430),
     onPrimaryContainer = Pink80,
     secondary = Color(0xFFA7CCE8),
-    secondaryContainer = Color(0xFF263D4C),
-    tertiary = PinkTertiaryDark,
-    tertiaryContainer = Color(0xFF553F24),
+    onSecondary = Color(0xFF101418),
+    secondaryContainer = Color(0xFF1D3342),
+    onSecondaryContainer = Color(0xFFD8EEFF),
+    tertiary = Color(0xFFFFC56F),
+    onTertiary = Color(0xFF18130A),
+    tertiaryContainer = Color(0xFF3D2D12),
+    onTertiaryContainer = Color(0xFFFFE6B9),
     surface = SurfaceDark,
-    surfaceContainerLowest = Color(0xFF151315),
-    surfaceContainerLow = Color(0xFF1D191E),
+    surfaceContainerLowest = Color(0xFF0B0B0F),
+    surfaceContainerLow = Color(0xFF16161A),
     surfaceContainer = SurfaceContainerDark,
-    surfaceContainerHigh = Color(0xFF302930),
-    surfaceContainerHighest = Color(0xFF3B3039),
+    surfaceContainerHigh = Color(0xFF2A2A2E),
+    surfaceContainerHighest = Color(0xFF34343A),
     onSurface = OnSurfaceDark,
-    onSurfaceVariant = Color(0xFFD4C5CC),
-    surfaceVariant = Color(0xFF42383F),
-    outline = Color(0xFF94838B),
-    outlineVariant = Color(0xFF54474F),
-    background = Color(0xFF141113),
+    onSurfaceVariant = Color(0xFFAEAEB2),
+    surfaceVariant = Color(0xFF303036),
+    outline = Color(0xFF767680),
+    outlineVariant = Color(0xFF3F3F46),
+    background = Color(0xFF0F0F13),
     onBackground = OnSurfaceDark,
     surfaceTint = PinkPrimaryDark,
 )
@@ -95,21 +101,102 @@ private fun Context.optionalMiSansFontFamily(): FontFamily? {
 
 private fun appTypography(appFontFamily: FontFamily) = Typography().let { base ->
     base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        displayMedium = base.displayMedium.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        displaySmall = base.displaySmall.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
-        headlineLarge = base.headlineLarge.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        headlineMedium = base.headlineMedium.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        headlineSmall = base.headlineSmall.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        titleLarge = base.titleLarge.copy(fontFamily = appFontFamily, fontWeight = FontWeight.SemiBold),
-        titleMedium = base.titleMedium.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
-        titleSmall = base.titleSmall.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
-        bodyLarge = base.bodyLarge.copy(fontFamily = appFontFamily),
-        bodyMedium = base.bodyMedium.copy(fontFamily = appFontFamily),
-        bodySmall = base.bodySmall.copy(fontFamily = appFontFamily),
-        labelLarge = base.labelLarge.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
-        labelMedium = base.labelMedium.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
-        labelSmall = base.labelSmall.copy(fontFamily = appFontFamily, fontWeight = FontWeight.Medium),
+        displayLarge = base.displayLarge.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.sp
+        ),
+        displayMedium = base.displayMedium.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.sp
+        ),
+        displaySmall = base.displaySmall.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.sp
+        ),
+        headlineLarge = base.headlineLarge.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 30.sp,
+            lineHeight = 36.sp,
+            letterSpacing = 0.sp
+        ),
+        headlineMedium = base.headlineMedium.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 27.sp,
+            lineHeight = 33.sp,
+            letterSpacing = 0.sp
+        ),
+        headlineSmall = base.headlineSmall.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 24.sp,
+            lineHeight = 30.sp,
+            letterSpacing = 0.sp
+        ),
+        titleLarge = base.titleLarge.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 21.sp,
+            lineHeight = 27.sp,
+            letterSpacing = 0.sp
+        ),
+        titleMedium = base.titleMedium.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+            letterSpacing = 0.sp
+        ),
+        titleSmall = base.titleSmall.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            letterSpacing = 0.sp
+        ),
+        bodyLarge = base.bodyLarge.copy(
+            fontFamily = appFontFamily,
+            fontSize = 17.sp,
+            lineHeight = 23.sp,
+            letterSpacing = 0.sp
+        ),
+        bodyMedium = base.bodyMedium.copy(
+            fontFamily = appFontFamily,
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            letterSpacing = 0.sp
+        ),
+        bodySmall = base.bodySmall.copy(
+            fontFamily = appFontFamily,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.sp
+        ),
+        labelLarge = base.labelLarge.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            letterSpacing = 0.sp
+        ),
+        labelMedium = base.labelMedium.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            letterSpacing = 0.sp
+        ),
+        labelSmall = base.labelSmall.copy(
+            fontFamily = appFontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            letterSpacing = 0.sp
+        ),
     )
 }
 
@@ -138,7 +225,14 @@ fun YueMingTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.navigationBarColor = colorScheme.background.toArgb()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced = false
+            }
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 
