@@ -18,8 +18,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -95,6 +100,16 @@ dependencies {
     // FTP (Apache Commons Net)
     implementation("commons-net:commons-net:3.11.1")
 
+    // Testing
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("io.mockk:mockk:1.13.14")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }
