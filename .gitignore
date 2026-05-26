@@ -6,4 +6,5 @@
 *.iml
 .gradle/
 local.properties
-.gradle/
+.qoder/
+.claude/
