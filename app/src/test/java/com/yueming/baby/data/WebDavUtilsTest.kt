@@ -1,10 +1,10 @@
 package com.yueming.baby.data
 
+import com.yueming.baby.data.cloud.toWebDavConfig
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import kotlin.reflect.jvm.isAccessible
 
 @DisplayName("WebDAV 工具 & Cloud 配置单元测试")
 class WebDavUtilsTest {
@@ -155,7 +155,7 @@ class WebDavUtilsTest {
     @DisplayName("buildAbsoluteUrl 路径拼接")
     inner class AbsoluteUrlTests {
         @Test
-        fun `远程路径带 / 前缀`() {
+        fun `远程路径带斜杠前缀`() {
             val config = WebDavManager.WebDavConfig(
                 url = "http://192.168.0.28:5005",
                 username = "test",
@@ -166,7 +166,7 @@ class WebDavUtilsTest {
         }
 
         @Test
-        fun `远程路径不带 / 前缀`() {
+        fun `远程路径不带斜杠前缀`() {
             val config = WebDavManager.WebDavConfig(
                 url = "http://192.168.0.28:5005",
                 username = "test",

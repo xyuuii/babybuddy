@@ -209,10 +209,11 @@ class DataModelsTest {
         }
 
         @Test
-        fun `getMilestonesForAge(0) 应只包含新生儿筛查`() {
+        fun `getMilestonesForAge(0) 应包含新生儿和满月里程碑`() {
             val milestones = getMilestonesForAge(0)
-            assertEquals(1, milestones.size)
-            assertEquals("新生儿筛查", milestones.first().title)
+            assertEquals(2, milestones.size)
+            assertTrue(milestones.any { it.title == "新生儿筛查" })
+            assertTrue(milestones.any { it.title == "满月体检" })
         }
 
         @Test
