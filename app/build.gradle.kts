@@ -61,7 +61,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("io.github.kyant0:backdrop:1.0.6")
+    implementation("io.github.kyant0:backdrop:2.0.0")
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.1")
     implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.1")
 
